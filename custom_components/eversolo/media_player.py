@@ -33,7 +33,7 @@ class EversoloMediaPlayer(CoordinatorEntity[EversoloCoordinator], MediaPlayerEnt
     _attr_name = "Player"
     _attr_supported_features = (
         MediaPlayerEntityFeature.PLAY | MediaPlayerEntityFeature.PAUSE |
-        MediaPlayerEntityFeature.PLAY_PAUSE | MediaPlayerEntityFeature.NEXT_TRACK |
+        MediaPlayerEntityFeature.NEXT_TRACK |
         MediaPlayerEntityFeature.PREVIOUS_TRACK | MediaPlayerEntityFeature.VOLUME_SET |
         MediaPlayerEntityFeature.SEEK
     )
