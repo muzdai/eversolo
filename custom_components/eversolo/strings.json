@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Eversolo",
+        "description": "Enter the local IP address and HTTP port of your Eversolo player.",
+        "data": {
+          "host": "IP address or hostname",
+          "port": "HTTP port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the device. Check the IP address, port and network."
+    },
+    "abort": {
+      "already_configured": "This Eversolo device is already configured."
+    }
+  }
+}
