@@ -1,41 +1,43 @@
 """Media player entity for Eversolo."""
 from typing import Any
-from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerEntityFeature, MediaPlayerState
+
+from homeassistant.components.media_player import (
+    MediaPlayerEntity,
+    MediaPlayerEntityFeature,
+    MediaPlayerState,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import EversoloCoordinator
 
-def _dicts(value: Any):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            if isinstance(child, dict):
-                yield from _dicts(child)
-            elif isinstance(child, list):
-                for item in child:
-                    yield from _dicts(item)
 
-def _find(data: Any, keys: tuple[str, ...]):
-    for item in _dicts(data):
-        for key in keys:
-            if item.get(key) is not None:
-                return item[key]
-    return None
+def _nested_dict(data: Any, *path: str) -> dict[str, Any]:
+    value = data
+    for key in path:
+        if not isinstance(value, dict):
+            return {}
+        value = value.get(key)
+    return value if isinstance(value, dict) else {}
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     async_add_entities([EversoloMediaPlayer(hass.data[DOMAIN][entry.entry_id], entry)])
+
 
 class EversoloMediaPlayer(CoordinatorEntity[EversoloCoordinator], MediaPlayerEntity):
     _attr_has_entity_name = True
     _attr_name = "Player"
     _attr_supported_features = (
-        MediaPlayerEntityFeature.PLAY | MediaPlayerEntityFeature.PAUSE |
-        MediaPlayerEntityFeature.NEXT_TRACK |
-        MediaPlayerEntityFeature.PREVIOUS_TRACK | MediaPlayerEntityFeature.VOLUME_SET |
-        MediaPlayerEntityFeature.SEEK
+        MediaPlayerEntityFeature.PLAY
+        | MediaPlayerEntityFeature.PAUSE
+        | MediaPlayerEntityFeature.NEXT_TRACK
+        | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.VOLUME_SET
+        | MediaPlayerEntityFeature.SEEK
     )
 
     def __init__(self, coordinator: EversoloCoordinator, entry: ConfigEntry):
@@ -55,10 +57,19 @@ class EversoloMediaPlayer(CoordinatorEntity[EversoloCoordinator], MediaPlayerEnt
 
     @property
     def state(self):
-        raw = self.coordinator.data.get("state") if self.coordinator.data else None
-        value = _find(raw, ("playState", "playStatus", "status", "state", "playerState"))
-        if value is None and isinstance(raw, str):
-            value = raw
+        raw = (self.coordinator.data or {}).get("state")
+        info = _nested_dict(raw, "everSoloPlayInfo")
+        value = info.get("playStatus")
+        if value is None:
+            value = raw.get("state") if isinstance(raw, dict) else raw
+        if isinstance(value, (int, float)):
+            # DMP-A6 response: everSoloPlayInfo.playStatus == 2 while playing.
+            if value == 2:
+                return MediaPlayerState.PLAYING
+            if value == 1:
+                return MediaPlayerState.PAUSED
+            if value == 0:
+                return MediaPlayerState.IDLE
         text = str(value).lower() if value is not None else ""
         if "pause" in text:
             return MediaPlayerState.PAUSED
@@ -70,26 +81,59 @@ class EversoloMediaPlayer(CoordinatorEntity[EversoloCoordinator], MediaPlayerEnt
 
     @property
     def volume_level(self):
-        raw = self.coordinator.data.get("volume") if self.coordinator.data else None
-        value = _find(raw, ("volume", "currentVolume", "soundVolume", "value", "level"))
-        if value is None and isinstance(raw, (int, float)):
-            value = raw
+        data = self.coordinator.data or {}
+        state_data = data.get("state")
+        volume_data = _nested_dict(state_data, "volumeData")
+        if not volume_data:
+            volume_data = _nested_dict(data.get("volume"), "volumeData")
+        value = volume_data.get("currenttVolume")
+        maximum = volume_data.get("maxVolume", 200)
         try:
-            return max(0.0, min(1.0, float(value) / 100))
+            maximum = float(maximum)
+            return max(0.0, min(1.0, float(value) / maximum)) if maximum > 0 else None
         except (TypeError, ValueError):
             return None
 
     @property
     def media_title(self):
-        raw = self.coordinator.data.get("state") if self.coordinator.data else None
-        value = _find(raw, ("title", "musicName", "songName", "trackName"))
+        music = _nested_dict((self.coordinator.data or {}).get("state"), "playingMusic")
+        value = music.get("title")
         return str(value) if value is not None else None
 
     @property
     def media_artist(self):
-        raw = self.coordinator.data.get("state") if self.coordinator.data else None
-        value = _find(raw, ("artist", "artistName", "singer", "author"))
+        music = _nested_dict((self.coordinator.data or {}).get("state"), "playingMusic")
+        value = music.get("artist")
         return str(value) if value is not None else None
+
+    @property
+    def media_album_name(self):
+        music = _nested_dict((self.coordinator.data or {}).get("state"), "playingMusic")
+        value = music.get("album")
+        return str(value) if value is not None else None
+
+    @property
+    def media_image_url(self):
+        music = _nested_dict((self.coordinator.data or {}).get("state"), "playingMusic")
+        value = music.get("albumArt")
+        return str(value) if value else None
+
+    @property
+    def media_duration(self):
+        raw = (self.coordinator.data or {}).get("state")
+        try:
+            # The API reports position and duration in milliseconds.
+            return float(raw["duration"]) / 1000 if isinstance(raw, dict) and raw.get("duration") is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def media_position(self):
+        raw = (self.coordinator.data or {}).get("state")
+        try:
+            return float(raw["position"]) / 1000 if isinstance(raw, dict) and raw.get("position") is not None else None
+        except (TypeError, ValueError):
+            return None
 
     async def async_media_play(self):
         if self.state != MediaPlayerState.PLAYING:
