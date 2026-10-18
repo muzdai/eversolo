@@ -68,13 +68,13 @@ class EversoloClient:
         return await self.async_request("/ZidooMusicControl/v2/getVolume")
 
     async def async_play_pause(self):
-        await self.async_request("/ZidooMusicControl/v2/playOrPause")
+        await self.async_request("/ZidooControlCenter/RemoteControl/sendkey", {"key": "Key.MediaPlay.Pause"})
 
     async def async_next(self):
-        await self.async_request("/ZidooMusicControl/v2/playNext")
+        await self.async_request("/ZidooControlCenter/RemoteControl/sendkey", {"key": "Key.MediaNext"})
 
     async def async_previous(self):
-        await self.async_request("/ZidooMusicControl/v2/playLast")
+        await self.async_request("/ZidooControlCenter/RemoteControl/sendkey", {"key": "Key.MediaPrev"})
 
     async def async_seek(self, position: float):
         await self.async_request("/ZidooMusicControl/v2/seekTo", {"time": str(int(position * 1000))})
