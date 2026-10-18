@@ -63,10 +63,10 @@ class EversoloMediaPlayer(CoordinatorEntity[EversoloCoordinator], MediaPlayerEnt
         if value is None:
             value = raw.get("state") if isinstance(raw, dict) else raw
         if isinstance(value, (int, float)):
-            # DMP-A6 response: everSoloPlayInfo.playStatus == 2 while playing.
-            if value == 2:
-                return MediaPlayerState.PLAYING
+            # DMP-A6 reports playStatus == 1 while playing and 2 while paused.
             if value == 1:
+                return MediaPlayerState.PLAYING
+            if value == 2:
                 return MediaPlayerState.PAUSED
             if value == 0:
                 return MediaPlayerState.IDLE
