@@ -4,19 +4,24 @@ import json
 import logging
 from datetime import timedelta
 from typing import Any
+
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
 from .const import DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class EversoloApiError(Exception):
     """Local API request failed."""
 
+
 class EversoloClient:
-    """Client for endpoints observed in Eversolo Controller APK."""
+    """Client for Eversolo's local HTTP API."""
+
     def __init__(self, hass: HomeAssistant, host: str, port: int = 9529):
         self._session = async_get_clientsession(hass)
         self.host, self.port = host, int(port)
@@ -25,8 +30,9 @@ class EversoloClient:
     async def async_request(self, path: str, params: dict[str, Any] | None = None) -> Any:
         try:
             async with self._session.get(
-                f"{self.base_url}{path}", params=params,
-                timeout=aiohttp.ClientTimeout(total=5)
+                f"{self.base_url}{path}",
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 response.raise_for_status()
                 body = await response.text()
@@ -45,6 +51,11 @@ class EversoloClient:
         except EversoloApiError:
             data = await self.async_request("/ZidooMusicControl/v2/getState")
         if isinstance(data, dict):
+            device = data.get("deviceInfo", {})
+            if isinstance(device, dict):
+                for key in ("model", "deviceName", "name"):
+                    if isinstance(device.get(key), str):
+                        return device[key]
             for key in ("model", "modelName", "deviceName", "name"):
                 if isinstance(data.get(key), str):
                     return data[key]
@@ -66,24 +77,25 @@ class EversoloClient:
         await self.async_request("/ZidooMusicControl/v2/playLast")
 
     async def async_seek(self, position: float):
-        # Milliseconds are provisional; verify with the target firmware.
         await self.async_request("/ZidooMusicControl/v2/seekTo", {"time": str(int(position * 1000))})
 
     async def async_set_volume(self, volume: float):
-        # The 0–100 scale is provisional and needs hardware validation.
-        value = round(max(0.0, min(1.0, volume)) * 100)
+        # getVolume reports maxVolume=200 on the user's DMP-A6 firmware.
+        value = round(max(0.0, min(1.0, volume)) * 200)
         await self.async_request("/ZidooMusicControl/v2/setDevicesVolume", {"volume": str(value)})
 
 class EversoloCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, host: str, port: int):
         self.client = EversoloClient(hass, host, port)
         self.host, self.port = host, port
-        super().__init__(hass, _LOGGER, name=f"Eversolo {host}",
-                         update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL))
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"Eversolo {host}",
+            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+        )
 
     async def _async_update_data(self):
-        # Poll both endpoints on every coordinator cycle. At 100ms this is an
-        # intentionally aggressive 10Hz cycle (up to 20 HTTP requests/second).
         state_result, volume_result = await asyncio.gather(
             self.client.async_get_state(),
             self.client.async_get_volume(),
