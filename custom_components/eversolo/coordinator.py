@@ -1,4 +1,5 @@
 """Local HTTP client and polling coordinator for Eversolo."""
+import asyncio
 import json
 import logging
 from datetime import timedelta
@@ -81,12 +82,16 @@ class EversoloCoordinator(DataUpdateCoordinator):
                          update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL))
 
     async def _async_update_data(self):
-        try:
-            state = await self.client.async_get_state()
-            try:
-                volume = await self.client.async_get_volume()
-            except EversoloApiError:
-                volume = None
-            return {"state": state, "volume": volume}
-        except EversoloApiError as err:
-            raise UpdateFailed(str(err)) from err
+        # Poll both endpoints on every coordinator cycle. At 100ms this is an
+        # intentionally aggressive 10Hz cycle (up to 20 HTTP requests/second).
+        state_result, volume_result = await asyncio.gather(
+            self.client.async_get_state(),
+            self.client.async_get_volume(),
+            return_exceptions=True,
+        )
+        if isinstance(state_result, Exception):
+            raise UpdateFailed(str(state_result)) from state_result
+        volume = None if isinstance(volume_result, Exception) else volume_result
+        if isinstance(volume_result, Exception):
+            _LOGGER.debug("Eversolo volume poll failed: %s", volume_result)
+        return {"state": state_result, "volume": volume}
