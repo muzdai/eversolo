@@ -3,8 +3,12 @@
     "step": {
       "user": {
         "title": "Eversolo device",
-        "description": "Enter the IP address of your Eversolo DMP/DAC. The default API port is 9529.",
-        "data": { "host": "Host / IP address", "port": "Port" }
+        "description": "Give the player a name (it becomes the prefix of entity ids, e.g. media_player.eversolo) and enter its IP address. The default API port is 9529.",
+        "data": {
+          "name": "Name",
+          "host": "Host / IP address",
+          "port": "Port"
+        }
       },
       "authorize": {
         "title": "Confirm on the device",
@@ -21,13 +25,23 @@
   },
   "entity": {
     "select": {
-      "input": { "name": "Input" },
-      "output": { "name": "Output" },
-      "service": { "name": "Music service" },
-      "vu": { "name": "Meter display" }
+      "input": {
+        "name": "Input"
+      },
+      "output": {
+        "name": "Output"
+      },
+      "service": {
+        "name": "Music service"
+      },
+      "vu": {
+        "name": "Meter display"
+      }
     },
     "switch": {
-      "display": { "name": "Front display" }
+      "display": {
+        "name": "Front display"
+      }
     }
   }
 }

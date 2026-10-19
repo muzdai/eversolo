@@ -3,8 +3,12 @@
     "step": {
       "user": {
         "title": "Устройство Eversolo",
-        "description": "Введите IP-адрес DMP/DAC Eversolo. Порт API по умолчанию — 9529.",
-        "data": { "host": "Адрес (IP)", "port": "Порт" }
+        "description": "Задайте плееру имя (оно станет префиксом id сущностей, например media_player.eversolo) и введите его IP-адрес. Порт API по умолчанию — 9529.",
+        "data": {
+          "name": "Название",
+          "host": "Адрес (IP)",
+          "port": "Порт"
+        }
       },
       "authorize": {
         "title": "Подтвердите на устройстве",
@@ -21,13 +25,23 @@
   },
   "entity": {
     "select": {
-      "input": { "name": "Вход" },
-      "output": { "name": "Выход" },
-      "service": { "name": "Музыкальный сервис" },
-      "vu": { "name": "Индикаторы" }
+      "input": {
+        "name": "Вход"
+      },
+      "output": {
+        "name": "Выход"
+      },
+      "service": {
+        "name": "Музыкальный сервис"
+      },
+      "vu": {
+        "name": "Индикаторы"
+      }
     },
     "switch": {
-      "display": { "name": "Дисплей устройства" }
+      "display": {
+        "name": "Дисплей устройства"
+      }
     }
   }
 }

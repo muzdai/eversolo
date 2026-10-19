@@ -3,12 +3,14 @@
 DOMAIN = "eversolo"
 VERSION = "0.1.0"
 
+CONF_NAME = "name"
 CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_CLIENT_UUID = "client_uuid"
 CONF_FIRMWARE = "firmware"
 
 DEFAULT_PORT = 9529
+DEFAULT_NAME = "Eversolo"
 CLIENT_NAME = "Home Assistant"
 MDNS_SERVICE_TYPE = "_eversolo._tcp.local."
 
