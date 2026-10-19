@@ -7,7 +7,8 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components.zeroconf import ZeroconfServiceInfo
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EversoloApi, EversoloError
@@ -22,6 +23,11 @@ from .const import (
     DEFAULT_PORT,
     DOMAIN,
 )
+
+
+@callback
+def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+    return EversoloOptionsFlow()
 
 
 class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -105,3 +111,39 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_FIRMWARE: resp.get("firmware"),
             },
         )
+
+
+class EversoloOptionsFlow(OptionsFlow):
+    """Change name, host or port. The entry is reloaded after saving."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        entry = self.config_entry
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = user_input[CONF_NAME].strip() or DEFAULT_NAME
+            host = user_input[CONF_HOST].strip()
+            port = user_input.get(CONF_PORT, DEFAULT_PORT)
+            api = EversoloApi(async_get_clientsession(self.hass), host, port)
+            try:
+                resp = await api.connect(CLIENT_NAME, entry.data[CONF_CLIENT_UUID], ask_authority=False)
+            except EversoloError:
+                errors["base"] = "cannot_connect"
+            else:
+                if resp.get("status") != 200:
+                    errors["base"] = "not_authorized"
+                else:
+                    self.hass.config_entries.async_update_entry(
+                        entry,
+                        title=name,
+                        data={**entry.data, CONF_HOST: host, CONF_PORT: port},
+                    )
+                    return self.async_create_entry(title="", data={})
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=entry.title): str,
+                vol.Required(CONF_HOST, default=entry.data[CONF_HOST]): str,
+                vol.Optional(CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)): int,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

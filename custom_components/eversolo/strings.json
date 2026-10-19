@@ -43,5 +43,22 @@
         "name": "Front display"
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Eversolo settings",
+        "description": "Change the name, IP address or port. Existing entity ids are kept; rename entities in Settings if you want new ids.",
+        "data": {
+          "name": "Name",
+          "host": "Host / IP address",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the device. Check the address and that it is on the same network.",
+      "not_authorized": "The device has not confirmed the connection yet."
+    }
   }
 }
