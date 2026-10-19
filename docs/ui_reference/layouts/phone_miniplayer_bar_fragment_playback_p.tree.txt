@@ -1,0 +1,20 @@
+<LinearLayout> layout_width=match_parent layout_height=wrap_content background=?attr/play_playBar_bg orientation=horizontal
+  <androidx.constraintlayout.widget.ConstraintLayout> layout_width=0dp layout_height=match_parent layout_weight=1
+    <RelativeLayout> id=ll_background layout_width=match_parent layout_height=50dp
+      <com.makeramen.roundedimageview.RoundedImageView> id=background layout_width=match_parent layout_height=match_parent src=D:shape_playback_bar scaleType=centerCrop
+      <com.makeramen.roundedimageview.RoundedImageView> layout_width=match_parent layout_height=match_parent src=D:shape_shadow_light scaleType=centerCrop
+    <RelativeLayout> id=icon_layout layout_width=46dp layout_height=46dp background=D:shape_border_playback_img layout_marginStart=3dp
+      <androidx.constraintlayout.utils.widget.ImageFilterView> id=music_control_album layout_width=match_parent layout_height=match_parent src=?attr/rb_img_track_bg scaleType=fitCenter
+      <ImageView> id=cd_view layout_width=match_parent layout_height=match_parent src=?attr/play_bar_cd_mask
+      <com.zidoo.control.phone.module.apps.view.CircleProgressView> id=progress layout_width=46dp layout_height=46dp
+    <LinearLayout> layout_width=0dp layout_height=wrap_content layout_gravity=center_vertical orientation=vertical layout_marginStart=P:sw_10dp layout_marginEnd=P:sw_8dp
+      <com.zidoo.control.phone.module.music.view.MarqueeTextView> id=title layout_width=match_parent layout_height=wrap_content text=S:no_play_info_tips textSize=13sp textColor=?attr/play_bar_music_title_color gravity=bottom ellipsize=end
+      <TextView> id=artist layout_width=wrap_content layout_height=wrap_content textSize=9sp textColor=?attr/play_bar_music_info_color visibility=gone gravity=top layout_marginTop=2dp ellipsize=end
+    <RelativeLayout> id=video_icon_layout layout_width=50dp layout_height=50dp background=D:video_playback_img visibility=invisible
+      <com.makeramen.roundedimageview.RoundedImageView> id=video_control_album layout_width=match_parent layout_height=match_parent src=0x7f0806a5 layout_marginTop=1dp layout_marginStart=1dp layout_marginBottom=1dp layout_marginEnd=1dp scaleType=fitXY
+    <LinearLayout> id=control_layout layout_width=wrap_content layout_height=wrap_content orientation=horizontal layout_marginEnd=10dp
+      <ImageView> id=model layout_width=25dp layout_height=25dp src=D:musicplay_icon_mode visibility=gone layout_marginEnd=2dp
+      <ImageView> id=play_or_pause layout_width=25dp layout_height=25dp src=?attr/play_bar_play_old visibility=gone layout_marginEnd=2dp scaleType=centerInside
+      <ImageView> id=next layout_width=25dp layout_height=25dp src=?attr/play_bar_next_old visibility=gone layout_marginStart=P:sw_8dp scaleType=centerInside
+      <ImageView> id=play_queue layout_width=25dp layout_height=25dp src=?attr/play_bar_queue2_old visibility=gone layout_marginStart=P:sw_8dp scaleType=centerInside
+  <ImageView> id=round_play_queue layout_width=50dp layout_height=50dp src=?attr/play_bar_queue_old visibility=gone layout_gravity=bottom layout_marginTop=11dp layout_marginStart=P:sw_5dp scaleType=centerInside

@@ -1,0 +1,34 @@
+<RelativeLayout> layout_width=match_parent layout_height=match_parent
+  <LinearLayout> id=content layout_width=match_parent layout_height=wrap_content gravity=center_vertical orientation=horizontal layout_marginLeft=P:sw_20dp layout_marginRight=P:sw_20dp
+    <LinearLayout> layout_width=match_parent layout_height=wrap_content orientation=vertical
+      <LinearLayout> layout_width=match_parent layout_height=wrap_content gravity=center_vertical
+        <com.makeramen.roundedimageview.RoundedImageView> id=icon layout_width=P:sw_60dp layout_height=P:sw_60dp layout_marginEnd=P:sw_10dp scaleType=centerCrop
+        <LinearLayout> layout_width=match_parent layout_height=wrap_content orientation=vertical
+          <com.zidoo.control.phone.module.music.view.MarqueeTextView> id=music_title layout_width=wrap_content layout_height=wrap_content text=S:no_play_info_tips textSize=P:sw_18sp textColor=C:white ellipsize=marquee
+          <TextView> id=artist layout_width=wrap_content layout_height=wrap_content textSize=P:sw_13sp textColor=C:white50 layout_marginTop=P:sw_2dp ellipsize=end maxLines=1
+          <TextView> id=album layout_width=match_parent layout_height=wrap_content textSize=P:sw_13sp textColor=C:white50 ellipsize=end maxLines=1
+      <androidx.appcompat.widget.AppCompatTextView> id=tv_subscribe_to_vip layout_width=wrap_content layout_height=wrap_content text=S:arm_join_the_premium_v1 textSize=P:sw_11sp textColor=#ffc48b layout_marginStart=P:sw_70dp
+    <LinearLayout> layout_width=wrap_content layout_height=wrap_content layout_gravity=center_vertical orientation=horizontal layout_marginTop=P:sw_5dp
+      <ImageView> id=web_music layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_more visibility=gone layout_marginStart=P:sw_15dp
+      <ImageView> id=like layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_like visibility=gone layout_marginStart=P:sw_15dp
+      <ImageView> id=dislike layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_dislike visibility=gone layout_marginStart=P:sw_15dp
+      <ImageView> id=favorite layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_favorite visibility=gone layout_marginStart=P:sw_15dp
+      <ImageView> id=add_to_song_list layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_more visibility=gone layout_marginStart=P:sw_15dp
+      <ImageView> id=more layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_more visibility=gone layout_marginStart=P:sw_15dp
+  <ProgressBar> id=pb_load layout_width=wrap_content layout_height=wrap_content visibility=gone
+  <FrameLayout> layout_width=match_parent layout_height=match_parent
+    <com.zidoo.control.phone.module.music.view.MyManyLrcView> id=lyrics_view layout_width=match_parent layout_height=match_parent layout_marginTop=-8dp paddingStart=P:sw_20dp
+    <TextView> id=tv_no_lyric layout_width=wrap_content layout_height=wrap_content text=S:no_lyric textSize=P:sw_17sp textColor=C:white80 visibility=gone layout_gravity=center
+    <LinearLayout> id=content_player layout_width=match_parent layout_height=40dp layout_gravity=bottom orientation=vertical layout_marginLeft=P:sw_20dp layout_marginRight=P:sw_20dp
+      <LinearLayout> layout_width=match_parent layout_height=wrap_content gravity=end orientation=horizontal
+        <ImageView> id=model layout_width=P:sw_25dp layout_height=P:sw_25dp src=D:musicplay_icon_mode visibility=gone
+        <ImageView> id=last layout_width=P:sw_44dp layout_height=P:sw_44dp src=D:st_last visibility=gone layout_marginStart=P:sw_37dp
+        <ImageView> id=play_or_pause layout_width=P:sw_32dp layout_height=P:sw_32dp src=0x7f08081f visibility=visible layout_marginLeft=P:sw_17dp layout_marginRight=P:sw_17dp
+        <ImageView> id=next layout_width=P:sw_32dp layout_height=P:sw_32dp src=0x7f08081d visibility=visible
+        <ImageView> id=queue layout_width=P:sw_25dp layout_height=P:sw_25dp src=D:st_play_queue_detail visibility=gone
+      <LinearLayout> id=volume_layout layout_width=match_parent layout_height=P:sw_40dp visibility=gone gravity=center_vertical orientation=horizontal
+        <ImageView> id=volume_icon layout_width=P:sw_14dp layout_height=P:sw_12dp src=D:musicplay_volume_on layout_marginEnd=P:sw_5dp
+        <SeekBar> id=volume_seek layout_width=0dp layout_height=P:sw_15dp background=@null layout_weight=1 progressDrawable=D:seekbar_bg thumb=D:bg_volume_bt paddingTop=5.5dp paddingStart=P:sw_4dp
+        <TextView> id=tv_volum layout_width=wrap_content layout_height=wrap_content textSize=P:sw_11sp textColor=C:white50
+        <ImageView> id=volume_down layout_width=P:sw_22dp layout_height=P:sw_22dp src=D:st_sound_down layout_marginStart=P:sw_7dp
+        <ImageView> id=volume_up layout_width=P:sw_22dp layout_height=P:sw_22dp src=D:st_sound_up layout_marginStart=P:sw_15dp

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eversolo player: phone and tablet preview</title>
+<style>
+  /* Colours taken from values/colors.xml of Eversolo Controller 1.15.65 */
+  :root { --bg:#0c0c0d; --bg2:#0f0f0f; --title:#e6ffffff; --sub:#99ffffff; --accent:#c68a3c; --panel:#272727; --line:#55ebe9e9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#1a1a1c; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:#fff;
+         display:flex; flex-wrap:wrap; gap:48px; padding:40px 32px; align-items:flex-start; justify-content:center; }
+  h2 { width:100%; text-align:center; font-weight:500; color:#bbb; margin:0 0 36px; font-size:15px; letter-spacing:.04em; }
+  .phone { width:390px; height:844px; background:var(--bg); border-radius:36px; overflow:hidden; position:relative;
+           box-shadow:0 0 0 10px #000, 0 0 0 11px #333; }
+  .tablet { width:1000px; height:625px; background:var(--bg); border-radius:18px; overflow:hidden; position:relative;
+            box-shadow:0 0 0 8px #000, 0 0 0 9px #333; }
+  .art { background:radial-gradient(circle at 30% 30%, #6b4a2a, #2a2018 60%, #111); }
+  .blur { position:absolute; inset:-40px; background:radial-gradient(circle at 50% 30%, #5a3d22, #141414 70%); filter:blur(24px); opacity:.85; }
+  .scrim { position:absolute; inset:0; background:linear-gradient(#0c0c0dcc, #0c0c0d 75%); }
+  .ico { width:24px; height:24px; display:block; }
+  .ico.lg { width:36px; height:36px; }
+  .abs { position:absolute !important; }
+  .row { display:flex; align-items:center; }
+  .bar { height:3px; background:#ffffff33; border-radius:2px; position:relative; }
+  .bar > i { position:absolute; left:0; top:0; bottom:0; background:var(--accent); border-radius:2px; }
+  .dot { position:absolute; top:50%; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%; background:#fff; }
+  .muted { color:var(--sub); font-size:12px; }
+  /* phone */
+  .p-top { top:52px; left:20px; right:20px; }
+  .p-cover { left:32px; right:32px; top:150px; height:326px; border-radius:14px; }
+  .p-title { left:24px; right:24px; top:500px; text-align:left; }
+  .p-title b { font-size:22px; font-weight:600; color:var(--title); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .p-seek { left:24px; right:24px; top:575px; }
+  .p-times { left:24px; right:24px; top:588px; display:flex; justify-content:space-between; font-size:11px; color:var(--sub); }
+  .p-controls { left:24px; right:24px; top:626px; justify-content:space-between; }
+  .p-tools { left:24px; right:24px; top:712px; justify-content:space-between; }
+  .p-mini { left:8px; right:8px; bottom:14px; height:58px; border-radius:14px; background:#1d1d1f; border:1px solid #2b2b2e; padding:0 10px 0 6px; }
+  .thumb { width:46px; height:46px; border-radius:9px; flex:none; }
+  /* tablet */
+  .t-cover { left:40px; top:40px; width:400px; height:400px; border-radius:16px; }
+  .t-info { left:480px; top:60px; right:40px; }
+  .t-info b { font-size:30px; font-weight:600; display:block; }
+  .t-info .sub { font-size:17px; color:var(--sub); margin-top:6px; }
+  .t-lyric { left:480px; top:200px; right:40px; height:180px; color:var(--sub); font-size:17px; line-height:2; overflow:hidden; }
+  .t-lyric .cur { color:#fff; font-weight:600; font-size:20px; }
+  .t-seek { left:480px; right:40px; top:400px; }
+  .t-controls { left:480px; right:40px; top:430px; justify-content:space-between; }
+  .t-mini { left:0; right:0; bottom:0; height:92px; background:#141416; border-top:1px solid #2b2b2e; padding:0 24px; }
+  .t-vol { right:24px; width:300px; }
+  .label { position:absolute; left:12px; bottom:-26px; font-size:12px; color:#999; }
+</style>
+</head>
+<body>
+
+<div>
+  <h2>PHONE (portrait) : full player + mini bar</h2>
+  <div class="phone">
+    <div class="blur"></div><div class="scrim"></div>
+
+    <div class="abs p-top row" style="justify-content:space-between">
+      <span class="ico"></span>
+      <div style="text-align:center">
+        <div class="muted" style="font-size:11px">PLAYING FROM</div>
+        <div style="font-size:13px;color:#e6e6e6">DMP-A6 &middot; Local library</div>
+      </div>
+      <img class="ico" src="icons/musicplay_icon_more_default.png" alt="">
+    </div>
+
+    <div class="abs p-cover art"></div>
+
+    <div class="abs p-title">
+      <b>Track title</b>
+      <div class="muted" style="font-size:15px;margin-top:4px">Artist name &middot; Album</div>
+      <div class="row" style="gap:6px;margin-top:8px">
+        <img src="icons/musicplay_icon_lms.png" class="ico" style="width:18px;height:18px" alt="">
+        <img src="icons/musicplay_icon_mode.png" class="ico" style="width:18px;height:18px" alt="">
+      </div>
+    </div>
+
+    <div class="abs p-seek bar"><i style="width:38%"></i><span class="dot" style="left:38%"></span></div>
+    <div class="abs p-times"><span>01:12</span><span>-02:48</span></div>
+
+    <div class="abs p-controls row">
+      <img class="ico lg" src="icons/musicplay_icon_previous_default.png" alt="">
+      <img class="ico lg" src="icons/musicplay_icon_play_default.png" style="width:64px;height:64px" alt="">
+      <img class="ico lg" src="icons/musicplay_icon_next_default.png" alt="">
+    </div>
+
+    <div class="abs p-tools row">
+      <img class="ico" src="icons/musicplay_icon_eq_d.png" alt="">
+      <img class="ico" src="icons/musicplay_icon_dsp.png" alt="">
+      <img class="ico" src="icons/musicplay_icon_pinpu.png" alt="">
+      <img class="ico" src="icons/musicplay_icon_vu_default.png" alt="">
+      <img class="ico" src="icons/musicplay_icon_collection_default.png" alt="">
+    </div>
+
+    <div class="abs p-mini row">
+      <div class="thumb art"></div>
+      <div style="flex:1;margin-left:10px;min-width:0">
+        <div style="font-size:13px;color:var(--title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Track title</div>
+        <div class="muted" style="font-size:10px">DMP-A6</div>
+      </div>
+      <img class="ico" src="icons/musicplay_icon_pause_default.png" alt="">
+      <img class="ico" src="icons/musicplay_icon_next_default.png" alt="" style="margin-left:14px">
+      <img class="ico" src="icons/playbar_icon_queue2.png" alt="" style="margin-left:14px">
+    </div>
+  </div>
+</div>
+
+<div>
+  <h2>TABLET (landscape) : full player + bottom bar with volume</h2>
+  <div class="tablet" style="margin-top:0">
+    <div class="blur"></div><div class="scrim" style="background:linear-gradient(90deg,#0c0c0dcc,#0c0c0dee)"></div>
+
+    <div class="abs t-cover art"></div>
+
+    <div class="abs t-info">
+      <b>Track title</b>
+      <div class="sub">Artist name &middot; Album (2024)</div>
+      <div class="muted" style="margin-top:14px">FLAC 24bit / 96kHz &middot; DMP-A6 &middot; Balanced out</div>
+    </div>
+
+    <div class="abs t-lyric">
+      <div>Previous lyric line</div>
+      <div class="cur">Current lyric line highlighted here</div>
+      <div>Next lyric line</div>
+      <div>Following lyric line</div>
+    </div>
+
+    <div class="abs t-seek bar"><i style="width:38%"></i><span class="dot" style="left:38%"></span></div>
+    <div class="abs row t-controls" style="font-size:12px;color:var(--sub)">
+      <span>01:12</span>
+      <div class="row" style="gap:34px">
+        <img class="ico lg" src="icons/musicplay_icon_mode.png" alt="" style="width:28px;height:28px">
+        <img class="ico lg" src="icons/musicplay_icon_previous_default.png" alt="">
+        <img class="ico lg" src="icons/musicplay_icon_play_default.png" alt="" style="width:64px;height:64px">
+        <img class="ico lg" src="icons/musicplay_icon_next_default.png" alt="">
+        <img class="ico lg" src="icons/playbar_icon_queue2.png" alt="" style="width:28px;height:28px">
+      </div>
+      <span>-02:48</span>
+    </div>
+
+    <div class="abs t-mini row" style="gap:14px;">
+      <div class="thumb art" style="width:50px;height:50px"></div>
+      <div style="width:260px">
+        <div style="font-size:14px;color:var(--title)">Track title</div>
+        <div class="muted" style="font-size:11px">Artist name</div>
+      </div>
+      <img class="ico" src="icons/musicplay_icon_previous_default.png" alt="" style="width:34px;height:34px">
+      <img class="ico" src="icons/musicplay_icon_pause_default.png" alt="" style="width:34px;height:34px">
+      <img class="ico" src="icons/musicplay_icon_next_default.png" alt="" style="width:34px;height:34px">
+      <div class="abs t-vol row" style="position:absolute;right:24px;gap:10px">
+        <img class="ico" src="icons/musicplay_icon_vu_default.png" alt="" style="width:20px;height:20px">
+        <div class="bar" style="flex:1"><i style="width:55%"></i><span class="dot" style="left:55%"></span></div>
+        <span class="muted" style="width:26px;text-align:right">35</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

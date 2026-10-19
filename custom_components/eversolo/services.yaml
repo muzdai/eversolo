@@ -1,0 +1,92 @@
+set_input:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    name:
+      required: true
+      selector:
+        text:
+set_output:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    name:
+      required: true
+      selector:
+        text:
+set_service:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    name:
+      required: true
+      selector:
+        text:
+set_vu_mode:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    mode:
+      required: true
+      selector:
+        select:
+          options:
+            - vu
+            - spectrum
+set_display:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    on:
+      required: true
+      selector:
+        boolean:
+set_loop_mode:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    mode:
+      required: true
+      selector:
+        select:
+          options:
+            - list
+            - single
+            - shuffle
+request:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    path:
+      required: true
+      example: /ZidooMusicControl/v2/getState
+      selector:
+        text:

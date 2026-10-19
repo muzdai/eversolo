@@ -1,0 +1,47 @@
+<RelativeLayout> layout_width=match_parent layout_height=match_parent orientation=vertical
+  <LinearLayout> layout_width=match_parent layout_height=match_parent orientation=vertical
+    <androidx.constraintlayout.widget.ConstraintLayout> layout_width=match_parent layout_height=0dp layout_weight=1 layout_marginLeft=P:sw_20dp layout_marginRight=P:sw_20dp
+      <com.zidoo.control.phone.module.music.view.SquareImageView> id=album_img layout_width=0dp layout_height=0dp src=0x7f08068b
+      <androidx.appcompat.widget.AppCompatTextView> id=tv_subscribe_to_vip layout_width=wrap_content layout_height=wrap_content background=D:bg_kugou_subscribe_to_vip text=S:arm_join_the_premium textSize=P:sw_12sp textColor=#000000 visibility=gone layout_marginBottom=P:sw_13dp paddingTop=P:sw_3dp
+    <RelativeLayout> id=rl_layout layout_width=match_parent layout_height=0dp layout_weight=1
+      <LinearLayout> id=panel layout_width=match_parent layout_height=wrap_content orientation=vertical
+        <LinearLayout> layout_width=match_parent layout_height=wrap_content gravity=center_vertical orientation=vertical layout_marginLeft=P:sw_20dp layout_marginRight=P:sw_20dp
+          <LinearLayout> layout_width=match_parent layout_height=wrap_content orientation=horizontal
+            <LinearLayout> layout_width=0dp layout_height=wrap_content gravity=center_vertical layout_weight=1 orientation=vertical
+              <com.zidoo.control.phone.module.music.view.MarqueeTextView> id=music_title layout_width=wrap_content layout_height=wrap_content text=S:no_play_info_tips textSize=P:sw_18sp textColor=C:white ellipsize=marquee
+              <TextView> id=artist layout_width=wrap_content layout_height=wrap_content textSize=P:sw_13sp textColor=C:white50 layout_marginTop=P:sw_3dp ellipsize=end maxLines=1
+              <TextView> id=album layout_width=match_parent layout_height=wrap_content textSize=P:sw_13sp textColor=C:white50 layout_marginTop=P:sw_2dp ellipsize=end maxLines=1
+            <LinearLayout> layout_width=wrap_content layout_height=wrap_content layout_gravity=bottom orientation=horizontal layout_marginBottom=P:sw_36dp
+              <ImageView> id=web_music layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_more visibility=gone layout_marginStart=P:sw_15dp
+              <ImageView> id=like layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_like visibility=gone layout_marginStart=P:sw_15dp
+              <ImageView> id=dislike layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_dislike visibility=gone layout_marginStart=P:sw_15dp
+              <ImageView> id=favorite layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_favorite visibility=gone layout_marginStart=P:sw_15dp
+              <ImageView> id=add_to_song_list layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_more visibility=gone layout_marginStart=P:sw_15dp
+              <ImageView> id=more layout_width=P:sw_24dp layout_height=P:sw_24dp src=D:st_more visibility=gone layout_marginStart=P:sw_15dp
+          <LinearLayout> layout_width=wrap_content layout_height=wrap_content gravity=center_vertical orientation=horizontal layout_marginTop=P:sw_6dp
+            <ImageView> id=qualityLabel layout_width=wrap_content layout_height=P:sw_14dp visibility=gone gravity=center layout_marginEnd=P:sw_4dp scaleType=fitStart
+            <LinearLayout> id=info layout_width=wrap_content layout_height=wrap_content textSize=P:sw_13sp textColor=#dddddd orientation=horizontal ellipsize=end maxLines=1
+        <LinearLayout> layout_width=match_parent layout_height=wrap_content gravity=center_vertical orientation=vertical layout_marginTop=P:sw_18dp layout_marginLeft=P:sw_16dp layout_marginRight=P:sw_16dp
+          <SeekBar> id=seek layout_width=match_parent layout_height=P:sw_15dp background=@null progressDrawable=D:seekbar_bg thumb=0x7f080089 paddingTop=5.5dp paddingStart=P:sw_6dp
+          <FrameLayout> layout_width=match_parent layout_height=wrap_content layout_marginTop=P:sw_3dp
+            <TextView> id=tv_live layout_width=P:sw_40dp layout_height=P:sw_17dp background=D:bg_rotate_live_text text=S:tunein_live textSize=P:sw_9sp textColor=C:white visibility=gone gravity=center
+            <RelativeLayout> id=layout_time layout_width=match_parent layout_height=wrap_content layout_gravity=center_vertical
+              <TextView> id=position layout_width=wrap_content layout_height=wrap_content text=S:music_default_time textSize=P:sw_11sp textColor=C:white50 gravity=center layout_marginStart=P:sw_5dp
+              <TextView> id=duration layout_width=wrap_content layout_height=wrap_content text=S:music_default_time textSize=P:sw_11sp textColor=C:white50 gravity=center layout_marginEnd=P:sw_6dp
+            <LinearLayout> id=info_layout layout_width=wrap_content layout_height=wrap_content visibility=visible layout_gravity=center gravity=center_vertical orientation=horizontal
+              <ImageView> id=output_decodde layout_width=wrap_content layout_height=P:sw_13dp
+              <TextView> id=output_info layout_width=wrap_content layout_height=wrap_content textSize=P:sw_13sp textColor=C:white gravity=center layout_marginStart=P:sw_8dp layout_marginEnd=P:sw_5dp
+        <LinearLayout> layout_width=match_parent layout_height=P:sw_85dp gravity=center orientation=horizontal layout_marginTop=P:sw_10dp layout_marginLeft=P:sw_20dp layout_marginRight=P:sw_20dp
+          <ImageView> id=model layout_width=P:sw_25dp layout_height=P:sw_25dp src=D:musicplay_icon_mode visibility=visible
+          <ImageView> id=last layout_width=P:sw_44dp layout_height=P:sw_44dp src=D:st_last visibility=visible layout_marginStart=P:sw_37dp
+          <ImageView> id=play_or_pause layout_width=P:sw_52dp layout_height=P:sw_52dp src=D:st_play textColor=#aaaaaa visibility=visible layout_marginLeft=P:sw_30dp layout_marginRight=P:sw_30dp
+          <ImageView> id=next layout_width=P:sw_44dp layout_height=P:sw_44dp src=D:st_next visibility=visible layout_marginEnd=P:sw_37dp
+          <ImageView> id=queue layout_width=P:sw_25dp layout_height=P:sw_25dp src=D:st_play_queue_detail visibility=visible
+        <LinearLayout> id=volume_layout layout_width=match_parent layout_height=P:sw_40dp gravity=center_vertical orientation=horizontal layout_marginLeft=P:sw_20dp layout_marginRight=P:sw_20dp
+          <ImageView> id=volume_icon layout_width=P:sw_14dp layout_height=P:sw_12dp src=D:musicplay_volume_on layout_marginEnd=P:sw_5dp
+          <SeekBar> id=volume_seek layout_width=0dp layout_height=P:sw_15dp background=@null layout_weight=1 progressDrawable=D:seekbar_bg thumb=D:bg_volume_bt paddingTop=5.5dp paddingStart=P:sw_4dp
+          <TextView> id=tv_volum layout_width=wrap_content layout_height=wrap_content textSize=P:sw_11sp textColor=C:white50
+          <ImageView> id=volume_down layout_width=P:sw_22dp layout_height=P:sw_22dp src=D:st_sound_down layout_marginStart=P:sw_7dp
+          <ImageView> id=volume_up layout_width=P:sw_22dp layout_height=P:sw_22dp src=D:st_sound_up layout_marginStart=P:sw_15dp
+  <ProgressBar> id=pb_load layout_width=wrap_content layout_height=wrap_content visibility=gone
+  <TextView> id=gain_info layout_width=wrap_content layout_height=wrap_content background=D:shape_audio_output textSize=P:sw_11sp textColor=C:white50 visibility=gone layout_marginStart=P:sw_5dp layout_marginBottom=P:sw_110dp paddingTop=2dp paddingStart=5dp textStyle=bold
