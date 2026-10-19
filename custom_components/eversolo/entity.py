@@ -18,12 +18,9 @@ class EversoloEntity(CoordinatorEntity[EversoloCoordinator]):
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            # Fixed device name keeps entity ids universal: media_player.eversolo,
-            # select.eversolo_input, switch.eversolo_front_display, ...
-            # A second device gets the automatic suffix (eversolo_2).
-            name="Eversolo",
+            name=entry.title,
             manufacturer="Eversolo",
-            model=entry.title,
+            model="DMP / DAC",
             sw_version=entry.data.get(CONF_FIRMWARE),
             configuration_url=coordinator.api.base,
         )

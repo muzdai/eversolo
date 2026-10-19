@@ -7,18 +7,14 @@ custom repository и добавляет устройство с сущностя
 
 | Функция | Где |
 |---|---|
-| Плеер: play/pause, назад/вперёд, громкость, mute, перемотка, повтор/shuffle | `media_player.eversolo` |
+| Плеер: play/pause, назад/вперёд, громкость, mute, перемотка, повтор/shuffle | `media_player.<имя>` |
 | Карточка плеера: альбомный / портретный вид по форме карточки, фон по цветам обложки | Lovelace `custom:eversolo-player-card` |
-| Переключение входов | карточка, `select.eversolo_input`, сервис `eversolo.set_input` |
-| Переключение выходов | карточка, `select.eversolo_output`, сервис `eversolo.set_output` |
-| Музыкальные сервисы (локальная библиотека, Qobuz, Tidal и т.д., что есть на устройстве) | карточка, `select.eversolo_music_service`, сервис `eversolo.set_service` |
-| Стрелочные индикаторы (VU) / спектр на дисплее | карточка, `select.eversolo_meter_display`, сервис `eversolo.set_vu_mode` |
-| Дисплей устройства вкл/выкл | карточка, `switch.eversolo_front_display`, сервис `eversolo.set_display` (**экспериментально**) |
+| Переключение входов | карточка, `select.<имя>_input`, сервис `eversolo.set_input` |
+| Переключение выходов | карточка, `select.<имя>_output`, сервис `eversolo.set_output` |
+| Музыкальные сервисы (локальная библиотека, Qobuz, Tidal и т.д., что есть на устройстве) | карточка, `select.<имя>_music_service`, сервис `eversolo.set_service` |
+| Стрелочные индикаторы (VU) / спектр на дисплее | карточка, `select.<имя>_meter_display`, сервис `eversolo.set_vu_mode` |
+| Дисплей устройства вкл/выкл | карточка, `switch.<имя>_front_display`, сервис `eversolo.set_display` (**экспериментально**) |
 | Зондирование API | сервис `eversolo.request` (GET по произвольному пути, ответ возвращается) |
-
-Имена сущностей не зависят от модели или названия устройства: устройство всегда называется `Eversolo`,
-модель (DMP-A6 и т.п.) показывается в карточке устройства. Если добавлено несколько плееров, второй получит
-суффикс (`media_player.eversolo_2`).
 
 ## Установка через HACS
 
@@ -34,7 +30,7 @@ custom repository и добавляет устройство с сущностя
 
 ```yaml
 type: custom:eversolo-player-card
-entity: media_player.eversolo
+entity: media_player.dmp_a6
 show_background: true   # фон по обложке (по умолчанию true)
 show_chips: true        # ряд переключателей входа/выхода/сервиса/индикаторов
 ```
