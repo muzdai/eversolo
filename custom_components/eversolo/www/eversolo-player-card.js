@@ -2,9 +2,9 @@
  * - landscape / portrait layout picked from the card's own shape
  * - background colours sampled from the album cover (ambient style)
  * - inputs, outputs, music service, meter view, front display, loop mode
- * Version 0.1.0 — https://github.com/muzdai/eversolo
+ * Version 1.0.0 — https://github.com/muzdai/eversolo
  */
-const EVERSOLO_CARD_VERSION = "0.1.0";
+const EVERSOLO_CARD_VERSION = "1.0.0";
 
 const ICONS = {
   play: "M8 5v14l11-7z",
