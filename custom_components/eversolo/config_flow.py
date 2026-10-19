@@ -25,13 +25,14 @@ from .const import (
 )
 
 
-@callback
-def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-    return EversoloOptionsFlow()
-
-
 class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Home Assistant looks this up as a static method on the flow handler."""
+        return EversoloOptionsFlow()
 
     def __init__(self) -> None:
         self._name: str = DEFAULT_NAME
