@@ -4,7 +4,7 @@
  * - inputs, outputs, music service, meter view, front display, loop mode
  * Version 1.0.0 — https://github.com/muzdai/eversolo
  */
-const EVERSOLO_CARD_VERSION = "1.0.0";
+const EVERSOLO_CARD_VERSION = "1.0.1";
 
 const ICONS = {
   play: "M8 5v14l11-7z",
