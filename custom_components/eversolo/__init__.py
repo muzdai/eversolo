@@ -1,4 +1,4 @@
-"""Eversolo integration: media player, selects and switch for Eversolo DMP/DAC devices."""
+"""Eversolo integration: media player and selects for Eversolo DMP/DAC devices."""
 from __future__ import annotations
 
 import logging
@@ -21,13 +21,11 @@ from .coordinator import EversoloCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.SWITCH]
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT]
 
 SERVICE_SET_INPUT = "set_input"
 SERVICE_SET_OUTPUT = "set_output"
-SERVICE_SET_SERVICE = "set_service"
 SERVICE_SET_VU_MODE = "set_vu_mode"
-SERVICE_SET_DISPLAY = "set_display"
 SERVICE_SET_LOOP_MODE = "set_loop_mode"
 SERVICE_REQUEST = "request"
 
@@ -37,7 +35,6 @@ ATTR_NAME = "name"
 _ENTITY_SCHEMA = {vol.Required(ATTR_ENTITY_ID): cv.entity_id}
 SCHEMA_NAME = vol.Schema({**_ENTITY_SCHEMA, vol.Required(ATTR_NAME): cv.string})
 SCHEMA_VU = vol.Schema({**_ENTITY_SCHEMA, vol.Required("mode"): vol.In(["vu", "spectrum"])})
-SCHEMA_DISPLAY = vol.Schema({**_ENTITY_SCHEMA, vol.Required("on"): cv.boolean})
 SCHEMA_LOOP = vol.Schema({**_ENTITY_SCHEMA, vol.Required("mode"): vol.In(["list", "single", "shuffle"])})
 SCHEMA_REQUEST = vol.Schema(
     {
@@ -109,19 +106,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
     async def set_input(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         item = _resolve(coord.io["inputs"], call.data[ATTR_NAME])
-        await coord.api.set_input(item["tag"])
+        await coord.api.set_input(item["tag"], item["index"])
         await coord.async_request_refresh()
 
     async def set_output(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         item = _resolve(coord.io["outputs"], call.data[ATTR_NAME])
-        await coord.api.set_output(item["tag"])
-        await coord.async_request_refresh()
-
-    async def set_service(call: ServiceCall) -> None:
-        coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
-        item = _resolve(coord.services, call.data[ATTR_NAME])
-        await coord.api.set_service(item["tag"])
+        await coord.api.set_output(item["tag"], item["index"])
         await coord.async_request_refresh()
 
     async def set_vu_mode(call: ServiceCall) -> None:
@@ -130,13 +121,6 @@ def _async_register_services(hass: HomeAssistant) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         await coord.api.set_vu(VU_OPEN_TYPE[call.data["mode"]])
         await coord.async_request_refresh()
-
-    async def set_display(call: ServiceCall) -> None:
-        coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
-        on = call.data["on"]
-        await coord.api.set_display(on)
-        coord.display_on = on
-        coord.async_update_listeners()
 
     async def set_loop_mode(call: ServiceCall) -> None:
         from .const import LOOP_LIST, LOOP_SHUFFLE, LOOP_SINGLE
@@ -160,9 +144,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(DOMAIN, SERVICE_SET_INPUT, set_input, SCHEMA_NAME)
     hass.services.async_register(DOMAIN, SERVICE_SET_OUTPUT, set_output, SCHEMA_NAME)
-    hass.services.async_register(DOMAIN, SERVICE_SET_SERVICE, set_service, SCHEMA_NAME)
     hass.services.async_register(DOMAIN, SERVICE_SET_VU_MODE, set_vu_mode, SCHEMA_VU)
-    hass.services.async_register(DOMAIN, SERVICE_SET_DISPLAY, set_display, SCHEMA_DISPLAY)
     hass.services.async_register(DOMAIN, SERVICE_SET_LOOP_MODE, set_loop_mode, SCHEMA_LOOP)
     hass.services.async_register(
         DOMAIN, SERVICE_REQUEST, request, SCHEMA_REQUEST, supports_response=SupportsResponse.ONLY

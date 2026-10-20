@@ -22,18 +22,6 @@ set_output:
       required: true
       selector:
         text:
-set_service:
-  fields:
-    entity_id:
-      required: true
-      selector:
-        entity:
-          integration: eversolo
-          domain: media_player
-    name:
-      required: true
-      selector:
-        text:
 set_vu_mode:
   fields:
     entity_id:
@@ -49,18 +37,6 @@ set_vu_mode:
           options:
             - vu
             - spectrum
-set_display:
-  fields:
-    entity_id:
-      required: true
-      selector:
-        entity:
-          integration: eversolo
-          domain: media_player
-    on:
-      required: true
-      selector:
-        boolean:
 set_loop_mode:
   fields:
     entity_id:

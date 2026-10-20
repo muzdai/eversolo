@@ -31,16 +31,8 @@
       "output": {
         "name": "Output"
       },
-      "service": {
-        "name": "Music service"
-      },
       "vu": {
         "name": "Meter display"
-      }
-    },
-    "switch": {
-      "display": {
-        "name": "Front display"
       }
     }
   },

@@ -11,13 +11,12 @@ custom repository и добавляет устройство с сущностя
 | Карточка плеера: альбомный / портретный вид по форме карточки, фон по цветам обложки | Lovelace `custom:eversolo-player-card` |
 | Переключение входов | карточка, `select.<имя>_input`, сервис `eversolo.set_input` |
 | Переключение выходов | карточка, `select.<имя>_output`, сервис `eversolo.set_output` |
-| Музыкальные сервисы (локальная библиотека, Qobuz, Tidal и т.д., что есть на устройстве) | карточка, `select.<имя>_music_service`, сервис `eversolo.set_service` |
-| Стрелочные индикаторы (VU) / спектр на дисплее | карточка, `select.<имя>_meter_display`, сервис `eversolo.set_vu_mode` |
-| Дисплей устройства вкл/выкл | карточка, `switch.<имя>_front_display`, сервис `eversolo.set_display` (**экспериментально**) |
+| Стрелочные индикаторы (VU) / спектр на дисплее | карточка, `select.<имя>_meter_display`, сервис `eversolo.set_vu_mode` (**не проверено**) |
+| Не реализовано: вкл/выкл дисплея и выбор музыкального сервиса | в API приложения не найден метод, который это переключает (см. ниже) |
 | Зондирование API | сервис `eversolo.request` (GET по произвольному пути, ответ возвращается) |
 
 Название задаётся при добавлении интеграции (по умолчанию `Eversolo`) и становится префиксом id всех сущностей:
-`media_player.<название>`, `select.<название>_input`, `switch.<название>_front_display` и т.д.
+`media_player.<название>`, `select.<название>_input`, `select.<название>_output` и т.д.
 Пример ниже предполагает название `Eversolo`.
 
 ## Установка через HACS
@@ -42,7 +41,7 @@ custom repository и добавляет устройство с сущностя
 type: custom:eversolo-player-card
 entity: media_player.dmp_a6
 show_background: true   # фон по обложке (по умолчанию true)
-show_chips: true        # ряд переключателей входа/выхода/сервиса/индикаторов
+show_chips: true        # ряд переключателей входа/выхода/индикаторов
 ```
 
 Вид выбирается по форме карточки: если ширина больше высоты, используется альбомный макет, иначе портретный.
@@ -53,9 +52,7 @@ show_chips: true        # ряд переключателей входа/вых�
 ```yaml
 service: eversolo.set_input        # data: entity_id, name (имя или tag из списка)
 service: eversolo.set_output       # data: entity_id, name
-service: eversolo.set_service      # data: entity_id, name
 service: eversolo.set_vu_mode      # data: entity_id, mode: vu | spectrum
-service: eversolo.set_display      # data: entity_id, on: true|false
 service: eversolo.set_loop_mode    # data: entity_id, mode: list | single | shuffle
 service: eversolo.request          # data: entity_id, path  -> response: сырой ответ устройства
 ```
@@ -69,18 +66,21 @@ service: eversolo.request          # data: entity_id, path  -> response: сыр�
   `seekTo`, `setDevicesVolume`, `setLoopMode`, `sendkey Key.Mute`, `setInputList`, `setOutInputList`,
   `setDisplayMusicServerTag`, `changVUDisplay`, `getInputAndOutputList`, `getSupportServer`, `getImage`.
 * **Не проверено (допущения):**
-  * **Дисплей вкл/выкл** (`switch`): сейчас реализовано через `SystemSettings/functionSettings/setFrontBright?value=0|3`.
-    Это яркость передней панели, а не отдельная команда питания дисплея, и значения 0/3 не подтверждены.
-    Если на вашей прошивке есть другой путь, подправьте `api.set_display`.
-    Состояние этого переключателя оптимистичное, устройство его не сообщает.
-  * **Индикаторы:** `changVUDisplay(openType)`: `0` в приложении — кнопка VU, `1` — кнопка с иконкой «pinpu» (спектр).
-    Как читать текущий режим из `vuDisplayMode`, тоже не подтверждено.
-  * **Форматы ответов** `getInputAndOutputList` и `getSupportServer` неизвестны, парсер разбирает их по эвристике.
-    Если входы или сервисы не видны, посмотрите сырой ответ через `eversolo.request` и поправьте `api.parse_io`.
+  * **Индикаторы:** `changVUDisplay(openType)`: `0` в приложении — кнопка VU, `1` — кнопка спектра.
+    Как устройство переключает режимы и что означает `vuDisplayMode` (`-1`, `0`, `1`, `2`), на живом плеере не подтверждено.
+  * **Входы и выходы:** список читается из `getInputAndOutputList` (`inputData`/`outputData`, текущий элемент по `inputIndex`/`outputIndex`),
+    переключение — `setInputList`/`setOutInputList` с `tag`, `index` и `isLight=true`, как в приложении.
   * **Единицы времени:** считается, что `duration`/`position`/`seekTo` в миллисекундах, если `duration > 20000`.
-  * **Сервис «Музыкальный сервис»:** `setDisplayMusicServerTag` переключает вкладку сервиса; что именно
-    начинает играть на устройстве, требует проверки.
   * **Обложка:** берётся `albumArtBig`/`albumArt` из `playingMusic`. Если это не URL, запрашивается `getImage?content=`.
+
+### Что не реализовано
+
+* **Вкл/выкл дисплея.** Прежний вариант через `setFrontBright` был неверен: это регулировка яркости, а не питание дисплея.
+  Список яркостей приложение берёт из `SystemSettings/functionSettings/getFrontBrightList`, но код обработки в декомпиляции отсутствует.
+  Для проверки используйте сервис `eversolo.request` с путём `/SystemSettings/functionSettings/getFrontBrightList`.
+* **Выбор музыкального сервиса.** `getSupportServer` возвращает список тегов, а названия приложение берёт из своего конфига.
+  `setDisplayMusicServerTag` только показывает или скрывает вкладку сервиса, это не переключение.
+  Сервис запускается через отдельные вызовы контента (`playWebServerMusicList` и др.), поэтому сущность выбора убрана.
 
 ## Разработка
 

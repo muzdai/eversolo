@@ -172,10 +172,7 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
             "input_list": [i["name"] for i in io["inputs"]],
             "output": self._selected(io["outputs"]),
             "output_list": [i["name"] for i in io["outputs"]],
-            "service": self._selected(self.coordinator.services),
-            "service_list": [i["name"] for i in self.coordinator.services],
             "vu_mode": {0: "vu", 1: "spectrum"}.get(vu_mode),
-            "display_on": self.coordinator.display_on,
             "loop_mode": {LOOP_LIST: "list", LOOP_SINGLE: "single", LOOP_SHUFFLE: "shuffle"}.get(
                 self._state.get("loopModel"), "list"
             ),
@@ -233,6 +230,6 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
     async def async_select_source(self, source: str) -> None:
         for item in self.coordinator.io["inputs"]:
             if item["name"] == source:
-                await self.coordinator.api.set_input(item["tag"])
+                await self.coordinator.api.set_input(item["tag"], item["index"])
                 await self.coordinator.async_request_refresh()
                 return

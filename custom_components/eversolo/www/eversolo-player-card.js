@@ -1,10 +1,10 @@
 /* Eversolo player card for Home Assistant
  * - landscape / portrait layout picked from the card's own shape
  * - background colours sampled from the album cover (ambient style)
- * - inputs, outputs, music service, meter view, front display, loop mode
+ * - inputs, outputs, meter view, loop mode
  * Version 1.0.0 — https://github.com/muzdai/eversolo
  */
-const EVERSOLO_CARD_VERSION = "1.0.2";
+const EVERSOLO_CARD_VERSION = "1.1.0";
 
 const ICONS = {
   play: "M8 5v14l11-7z",
@@ -234,12 +234,9 @@ class EversoloPlayerCard extends HTMLElement {
     const list = [
       ["input", "Input", a.input],
       ["output", "Out", a.output],
-      ["service", "Service", a.service],
       ["vu", "Meter", a.vu_mode === "spectrum" ? "Spectrum" : a.vu_mode === "vu" ? "VU" : "—"],
-      ["display", "Display", a.display_on == null ? "?" : a.display_on ? "On" : "Off"],
     ];
     chips.innerHTML = list
-      .filter(([k]) => !(k === "service" && !(a.service_list || []).length))
       .map(([k, label, val]) => `<button class="chip" data-chip="${k}"><b>${esc(label)}</b>${esc(val ?? "—")}</button>`)
       .join("");
   }
@@ -306,7 +303,7 @@ class EversoloPlayerCard extends HTMLElement {
     if (btn.dataset.opt) {
       const [kind, value] = btn.dataset.opt.split("|");
       menu.hidden = true;
-      const map = { input: "set_input", output: "set_output", service: "set_service" };
+      const map = { input: "set_input", output: "set_output" };
       if (map[kind]) return this._call("eversolo", map[kind], { entity_id: entity, name: value });
       if (kind === "vu") return this._call("eversolo", "set_vu_mode", { entity_id: entity, mode: value });
       if (kind === "loop") return this._call("eversolo", "set_loop_mode", { entity_id: entity, mode: value });
@@ -336,18 +333,14 @@ class EversoloPlayerCard extends HTMLElement {
 
   _openChip(kind, anchor) {
     const a = this._state().attributes;
-    if (kind === "display") {
-      return this._call("eversolo", "set_display", { entity_id: this._config.entity, on: !a.display_on });
-    }
     const lists = {
       input: [a.input_list || [], a.input],
       output: [a.output_list || [], a.output],
-      service: [a.service_list || [], a.service],
       vu: [["vu", "spectrum"], a.vu_mode],
     };
     const [items, current] = lists[kind] || [[], null];
     const labels = kind === "vu" ? { vu: "VU meter (needles)", spectrum: "Spectrum" } : {};
-    this._showMenu(anchor, { input: "Input", output: "Output", service: "Music service", vu: "Meter display" }[kind],
+    this._showMenu(anchor, { input: "Input", output: "Output", vu: "Meter display" }[kind],
       items.map((i) => [i, labels[i] || i, i === current]), kind);
   }
 

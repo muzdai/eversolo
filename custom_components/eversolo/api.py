@@ -8,13 +8,12 @@ from typing import Any
 
 import aiohttp
 
-from .const import CONF_CLIENT_UUID, DEFAULT_PORT
+from .const import DEFAULT_PORT
 
 _LOGGER = logging.getLogger(__name__)
 
 MUSIC = "/ZidooMusicControl/v2"
 CTRL = "/ZidooControlCenter"
-FUNC = "/SystemSettings/functionSettings"
 
 
 class EversoloError(Exception):
@@ -36,40 +35,26 @@ def _items(node: Any) -> list[dict]:
     return []
 
 
-def _norm(item: dict) -> dict:
-    tag = item.get("tag", item.get("id", item.get("name")))
-    name = item.get("name") or item.get("title") or str(tag)
-    selected = bool(
-        item.get("isSelect")
-        or item.get("isSelected")
-        or item.get("selected")
-        or item.get("checked")
-    )
-    return {"tag": str(tag), "name": str(name), "selected": selected}
+def _entry(item: dict, index: int, selected: bool) -> dict:
+    tag = str(item.get("tag", ""))
+    return {"tag": tag, "name": str(item.get("name") or tag), "index": index, "selected": selected}
 
 
 def parse_io(data: Any) -> dict[str, list[dict]]:
-    """Split getInputAndOutputList into inputs and outputs (best effort)."""
+    """Split getInputAndOutputList (a SourceInBean) into inputs and outputs.
+
+    The app marks the current entry by its position: inputIndex / outputIndex.
+    """
     result: dict[str, list[dict]] = {"inputs": [], "outputs": []}
-    if isinstance(data, dict):
-        for key, value in data.items():
-            low = key.lower()
-            if "output" in low or low == "out":
-                result["outputs"] += [_norm(i) for i in _items(value)]
-            elif "input" in low or "source" in low:
-                result["inputs"] += [_norm(i) for i in _items(value)]
-    elif isinstance(data, list):
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            kind = str(item.get("type", item.get("direction", ""))).lower()
-            bucket = "outputs" if "out" in kind else "inputs"
-            result[bucket].append(_norm(item))
+    if not isinstance(data, dict):
+        return result
+    in_idx = data.get("inputIndex")
+    out_idx = data.get("outputIndex")
+    for i, item in enumerate(_items(data.get("inputData"))):
+        result["inputs"].append(_entry(item, i, i == in_idx))
+    for i, item in enumerate(_items(data.get("outputData"))):
+        result["outputs"].append(_entry(item, i, i == out_idx))
     return result
-
-
-def parse_services(data: Any) -> list[dict]:
-    return [_norm(i) for i in _items(data)]
 
 
 class EversoloApi:
@@ -116,9 +101,6 @@ class EversoloApi:
     async def get_io(self) -> dict[str, list[dict]]:
         return parse_io(await self.request(f"{MUSIC}/getInputAndOutputList?isLight=true"))
 
-    async def get_services(self) -> list[dict]:
-        return parse_services(await self.request(f"{MUSIC}/getSupportServer"))
-
     async def get_cover(self, music: dict) -> tuple[bytes, str] | None:
         art = music.get("albumArtBig") or music.get("albumArt")
         if not art:
@@ -160,17 +142,11 @@ class EversoloApi:
     async def set_vu(self, open_type: int) -> None:
         await self.request(f"{MUSIC}/changVUDisplay?openType={int(open_type)}", raw=True)
 
-    async def set_input(self, tag: str) -> None:
-        await self.request(f"{MUSIC}/setInputList?tag={urllib.parse.quote(tag, safe='')}", raw=True)
+    async def set_input(self, tag: str, index: int) -> None:
+        """Same call the app makes: tag plus the entry's position in inputData."""
+        query = urllib.parse.quote(tag, safe="")
+        await self.request(f"{MUSIC}/setInputList?tag={query}&index={int(index)}&isLight=true", raw=True)
 
-    async def set_output(self, tag: str) -> None:
-        await self.request(f"{MUSIC}/setOutInputList?tag={urllib.parse.quote(tag, safe='')}", raw=True)
-
-    async def set_service(self, tag: str) -> None:
-        await self.request(
-            f"{MUSIC}/setDisplayMusicServerTag?parentTag={urllib.parse.quote(tag, safe='')}", raw=True
-        )
-
-    async def set_display(self, on: bool) -> None:
-        # UNVERIFIED: front-panel display control endpoint, see README.
-        await self.request(f"{FUNC}/setFrontBright?value={0 if not on else 3}", raw=True)
+    async def set_output(self, tag: str, index: int) -> None:
+        query = urllib.parse.quote(tag, safe="")
+        await self.request(f"{MUSIC}/setOutInputList?tag={query}&index={int(index)}&isLight=true", raw=True)
