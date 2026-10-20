@@ -1,7 +1,7 @@
 """Constants for the Eversolo integration."""
 
 DOMAIN = "eversolo"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 CONF_NAME = "name"
 CONF_HOST = "host"

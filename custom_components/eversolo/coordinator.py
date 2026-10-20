@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import EversoloApi, EversoloError
@@ -26,6 +27,7 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.api = api
         self.io: dict[str, list[dict]] = {"inputs": [], "outputs": []}
+        self.last_update_success_time = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -36,4 +38,5 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.io = await self.api.get_io()
         except EversoloError as err:
             _LOGGER.debug("Input/output list unavailable: %s", err)
+        self.last_update_success_time = dt_util.utcnow()
         return state
