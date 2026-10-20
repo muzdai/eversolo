@@ -67,6 +67,11 @@ port: 18240\r\n
 
 * Service type: **`_eversolo._tcp.local.`** (`BuildConfig.JmDNSName`). The app resolves the host with
   `getServiceInfo("_eversolo._tcp.local.", <uuid>, 3000)`.
+* The instance name is the device UUID. TXT records are `key=value` pairs that `MdnsDiscover.toJsonObject`
+  turns into JSON and `DiscoverManager` reads: `uuid`, `host`, `port`, `name` (**model**, e.g. `DMP-A6`),
+  `deviceName` (name set on the device), `disName`, `dType`, `net_mac`, `type`, `language`, `scene`,
+  `sceneCode`, and capability flags `ableRemoteShutdown`, `ableRemoteSleep`, `ableRemoteReboot`,
+  `ableRemoteBoot`, `ableMusicService`.
 
 ### 3.3 Subnet port scan (last resort)
 
@@ -102,15 +107,17 @@ Returns the `MusicState` object as top-level JSON (no envelope). Main fields:
 | Field | Meaning |
 |---|---|
 | `state` | 0 idle, 1 preparing, 2 prepared, 3 **playing**, 4 **paused** |
-| `position` / `duration` | playback position and length (same unit; the seek bar treats them as proportional) |
+| `position` / `duration` | playback position and length in **milliseconds** (the app formats them with `millSecondToTime`) |
 | `trackIndex` | index inside the play queue (-1 = none) |
-| `loopModel` | 0 list, 1 single cycle, 2 shuffle |
+| `loopModel` | 0 list cycle (repeat all), 1 single cycle, 2 shuffle, 3 list play once. The app's button sends `(loopModel + 1) % 4` |
+| `vuDisplayMode` | VU display mode on the device screen: -1, 0, 1, 2 (icons `vu_smg`, `vu`, `vu_big`, `vu_quit`). Below -1 the app hides the VU button. Gson default 0 |
+| `spDisplayMode` | spectrum display mode: 0, 1, 2 (icons `pinpu`, `pinpu_big`, `pinpu_quit`). Below 0 the app hides the spectrum button. Default -1 |
 | `playType` | source type code (5 = local library, others = streaming/online/DLNA…) |
 | `currentOutput` | active output/DAC index |
-| `playingMusic`, `playingTrack` | current track object (`Music`: `name`, `artist`, `album`, `albumId`, `id`, `path`, `duration`, `bits`, `sampleRate`, `codec`, `favor`, `lrcFileName`, `albumArt`…) |
-| `volumeData` | volume block (declared fields include `currenttVolume`, `maxVolume`, `minVolume`, `isMute`, `volumeTag`; check on device) |
+| `playingMusic`, `playingTrack` | library / internal player track (`Music`: `title`, `artist`, `album`, `albumArtist`, `albumArt`, `albumArtBig`, `id`, `type`, `number`, `duration`, `bits`, `sampleRate`, `codec`, `favor`…). `null` when another source plays |
+| `volumeData` | `currenttVolume`, `maxVolume`, `minVolume`, `mMargin` (slider step), `display` (text shown by the app), `isMute`, `isLock`, `isVolumeEnable`, `isDsdOut`, `volumeTag`, `intputTag` |
 | `hasFavor`, `hasLyric`, `hasPlayMode`, `hasPlayQueue`, `hasDspSetting`, `hasEQSetting`, `hasSubSetting`, `dspActive`, `eqActive`, `subActive` | feature flags |
-| `everSoloPlayInfo` (nested bean in `MusicState.java`) | audio/output details (field names as declared; verify nesting on device): `outPutSampleRate`, `outPutBits`, `outPutChannels`, `outPutDecodec`, `outPutMqaType`, `audioSampleRate`, `audioBitsPerSample`, `isDsdOut`, `isMute`, `currenttVolume`, `intputTag`, `volumeTag` |
+| `everSoloPlayInfo` | playback of other sources (Bluetooth, streaming apps): `playStatus` (1 or 3 = playing), `duration` (serialized name of `durationX`), `currentPosition`, `playType`, `isCanSeek`, `isCanNextPlay`, `isCanLastPlay`, `isCanChangePlayStatus`, `isVuMode`, nested `everSoloPlayAudioInfo` (`songName`, `artistName`, `albumName`, `albumUrl`, `audioSampleRate`, `audioBitsPerSample`, `audioChannels`, `audioDecodec`) and `everSoloPlayOutputInfo` (`outPutDecodec`, `outPutSampleRate`, `outPutBits`, `outPutChannels`, `outPutMqaType`), plus `everSoloBtInInfo` for Bluetooth |
 
 `MusicManager.getState` is also called by the phone home screen (`HomeActivityV2`, `HomeDevicesFragment2`).
 
@@ -125,15 +132,15 @@ All of these are GETs on `/ZidooMusicControl/v2/`.
 | Play / pause (toggle) | `playOrPause` | the main button; there is **no** separate play or pause call |
 | Next | `playNext` | |
 | Previous | `playLast` | |
-| Seek | `seekTo?time=<n>` | `n` uses the same unit as `duration` in `getState`. The app sends `duration * fraction` |
-| Loop mode | `setLoopMode?loop=<0\|1\|2>` | 0 list, 1 single, 2 shuffle |
-| Absolute volume | `setDevicesVolume?volume=<n>` | `n` from `minVolume` to `maxVolume` |
+| Seek | `seekTo?time=<ms>` | milliseconds; the app sends `duration * fraction` |
+| Loop mode | `setLoopMode?loop=<0..3>` | 0 repeat all, 1 repeat one, 2 shuffle, 3 play once |
+| Absolute volume | `setDevicesVolume?volume=<n>` | the app sends `step * mMargin`, slider max `maxVolume / mMargin` |
 | Read volume | `getSoundVolume` → `{"current":n,"max":m}` | |
 | Sound/preset index | `setSoundVolume?index=<n>` | purpose not fully clear from code; treat as unverified |
 | Mute | `setMuteVolume` (URL built in code; not verified) | the remote key path below is confirmed |
 | Effect/filter | `getEffects`, `setEffect?effect=<n>` | |
 | Feature list | `getDeviceSupportedFeatures` | use it to hide controls the device lacks |
-| Output / input | `getInputAndOutputList?isLight=true`, `setInputList?tag=…`, `setOutInputList?tag=…`, `editInputSource?type=0&tag=…` | source & output switching |
+| Output / input | `getInputAndOutputList?isLight=<bool>` → `SourceInBean` (`inputData[]`, `inputIndex`, `outputData[]`, `outputIndex`, `inputsetting`, `subwooferSetting`); `setInputList?tag=<tag>&index=<pos>&isLight=<bool>`, `setOutInputList?tag=<tag>&index=<pos>&isLight=<bool>` | the current entry is the one at `inputIndex` / `outputIndex`; the app polls the list every 2 s. `isLight` is the app theme (icon style) |
 
 ### 6.1 Remote-key emulation (the "remote control" screen)
 
@@ -150,6 +157,24 @@ Key names seen in the app: `VolumeUp`, `VolumeDown`, `Mute`, `Back`, `Home`, `Me
 `UserDefine_A`…`UserDefine_D`, plus the lowercase source names `music`, `movie`, `photo`, `file`.
 
 Use the sendkey path for remote-style keys. Use the `ZidooMusicControl` calls above for playback.
+
+### 6.2 Display meters, power menu and streaming apps
+
+| Action | Request | Source in the app |
+|---|---|---|
+| VU display: next mode | `changVUDisplay?openType=0` | `DetailsFragment` `vu_change` button |
+| Spectrum display: next mode | `changVUDisplay?openType=1` | `DetailsFragment` `sp_change` button |
+| Power menu | `getPowerOption` → `{"data":[{"name":…,"tag":…}]}` | `DevicePowerDialog`; names come from the device |
+| Run a power entry | `setPowerOption?tag=<tag>` | any entry except `timeshutdown` |
+| Sleep timer | `getTimePowerOff?mode=0`, `setTimePowerOff?index=<i>&time=<min>&isCustom=<bool>` | `DeviceTimePowerOffDialog` |
+| Streaming apps | `getStreamMediaAppList?start=0&count=100&showMusicApp=true&sort=4` → `data[]` with `title`, `packageName`, `appStatus` (0 installed, 1 not installed, 2 update available), `iconUrl` | `HomeStreamFragment` |
+| Open an app on the device | `ZidooControlCenter/Apps/openApp?packageName=<pkg>` | `HomeStreamFragment.openApp` |
+
+Each `changVUDisplay` call advances one step; the result shows up in `vuDisplayMode` / `spDisplayMode`.
+`getSupportServer` returns only service tags (`{"code":200,"data":["qobuz",…]}`); display names come from
+the app's own config, and `setDisplayMusicServerTag?parentTag&tag&isChecked` only shows or hides a service tab.
+There is no call that switches the "current service"; services start through their own play calls.
+`SystemSettings/functionSettings/setFrontBright` is a brightness list (`getFrontBrightList`), not a power switch.
 
 ---
 
@@ -175,6 +200,10 @@ envelope with `id`, `start`, `count`, `total`, `array`.
 ---
 
 ## 8. Images and lyrics
+
+Now-playing cover, as `RotateFragment` loads it: `playingMusic.albumArt` when it is set (a full URL);
+otherwise `getImage?id=<playingMusic.id>&musicType=<playingMusic.type>&type=4&target=16`
+(`MusicImageLoader.music().loadAlbum()`). Other sources: `everSoloPlayInfo.everSoloPlayAudioInfo.albumUrl`.
 
 ```
 GET /ZidooMusicControl/v2/getImage?id=<id>&musicType=<t>&type=<k>&target=<x>
@@ -244,7 +273,8 @@ python3 eversolo_client.py --host 192.168.1.50 loop 2
 | `connect` flow and `status` codes | read from `ConnectionTool` (high) |
 | Discovery multicast message format | read from `DiscoverManager` (high); not tested against a live device |
 | `getState` JSON field names | taken from the `MusicState` class; the app maps them with Gson, so names match the declared fields. Nested bean membership unverified |
-| Units of `seekTo?time` | proportional use confirmed; absolute unit (ms vs s) unverified |
+| Units of `position`/`duration`/`seekTo` | milliseconds (`millSecondToTime` in `RotateFragment`) |
+| `loopModel`, VU/spectrum modes, power menu, app list | read from the app code (high); labels of power entries come from the device |
 | `setSoundVolume?index` meaning | unverified |
 | `setMuteVolume` URL | not located in the code I read; use `sendkey?key=Key.Mute` |
 | Response bodies of write calls | most return plain text; some return JSON. Check with `curl` |

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Eversolo device",
-        "description": "Give the player a name (it becomes the prefix of entity ids, e.g. media_player.eversolo) and enter its IP address. The default API port is 9529.",
+        "description": "Give the player a name (it becomes the prefix of entity ids, e.g. media_player.eversolo) and enter its IP address. The default API port is 9529. Allow Home Assistant on the device screen when it asks.",
         "data": {
           "name": "Name",
           "host": "Host / IP address",
@@ -12,28 +12,15 @@
       },
       "authorize": {
         "title": "Confirm on the device",
-        "description": "Open the confirmation request on the Eversolo screen (host {host}) and allow Home Assistant, then press Submit."
+        "description": "The device at {host} did not confirm in time. Press Submit, then allow Home Assistant on the Eversolo screen."
       }
     },
     "error": {
       "cannot_connect": "Cannot reach the device. Check the address and that it is on the same network.",
-      "not_authorized": "The device has not confirmed the connection yet."
+      "not_authorized": "The device has not confirmed the connection."
     },
     "abort": {
       "already_configured": "This device is already configured."
-    }
-  },
-  "entity": {
-    "select": {
-      "input": {
-        "name": "Input"
-      },
-      "output": {
-        "name": "Output"
-      },
-      "vu": {
-        "name": "Meter display"
-      }
     }
   },
   "options": {
@@ -50,7 +37,144 @@
     },
     "error": {
       "cannot_connect": "Cannot reach the device. Check the address and that it is on the same network.",
-      "not_authorized": "The device has not confirmed the connection yet."
+      "not_authorized": "The device has not confirmed the connection."
+    }
+  },
+  "entity": {
+    "select": {
+      "input": {
+        "name": "Input"
+      },
+      "output": {
+        "name": "Output"
+      },
+      "app": {
+        "name": "Streaming app"
+      }
+    },
+    "button": {
+      "vu": {
+        "name": "VU meter: next mode"
+      },
+      "spectrum": {
+        "name": "Spectrum: next mode"
+      }
+    }
+  },
+  "selector": {
+    "loop_mode": {
+      "options": {
+        "repeat_all": "Repeat list",
+        "repeat_one": "Repeat track",
+        "shuffle": "Shuffle",
+        "play_once": "Play list once"
+      }
+    }
+  },
+  "services": {
+    "set_input": {
+      "name": "Set input",
+      "description": "Switch the device input.",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Input name or tag as listed in input_list."
+        }
+      }
+    },
+    "set_output": {
+      "name": "Set output",
+      "description": "Switch the device output.",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Output name or tag as listed in output_list."
+        }
+      }
+    },
+    "set_loop_mode": {
+      "name": "Set loop mode",
+      "description": "Repeat list, repeat track, shuffle or play the list once.",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Loop mode."
+        }
+      }
+    },
+    "vu_next": {
+      "name": "VU meter: next mode",
+      "description": "Same as the VU button in the Eversolo app.",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        }
+      }
+    },
+    "spectrum_next": {
+      "name": "Spectrum: next mode",
+      "description": "Same as the spectrum button in the Eversolo app.",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        }
+      }
+    },
+    "open_app": {
+      "name": "Open streaming app",
+      "description": "Open an app installed on the device (see app_list).",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        },
+        "name": {
+          "name": "Name",
+          "description": "App title or package name."
+        }
+      }
+    },
+    "power": {
+      "name": "Power menu",
+      "description": "Run an entry of the device power menu (see power_list).",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Entry name as shown in power_list, or its tag."
+        }
+      }
+    },
+    "request": {
+      "name": "Raw request",
+      "description": "GET any device API path and return the response.",
+      "fields": {
+        "entity_id": {
+          "name": "Player",
+          "description": "Eversolo media player entity."
+        },
+        "path": {
+          "name": "Path",
+          "description": "API path starting with /."
+        }
+      }
     }
   }
 }

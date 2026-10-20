@@ -5,7 +5,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_FIRMWARE, DOMAIN
+from .const import CONF_FIRMWARE, CONF_MODEL, DEFAULT_MODEL, DOMAIN
 from .coordinator import EversoloCoordinator
 
 
@@ -20,7 +20,7 @@ class EversoloEntity(CoordinatorEntity[EversoloCoordinator]):
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Eversolo",
-            model="DMP / DAC",
+            model=entry.data.get(CONF_MODEL) or DEFAULT_MODEL,
             sw_version=entry.data.get(CONF_FIRMWARE),
             configuration_url=coordinator.api.base,
         )

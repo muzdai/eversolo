@@ -15,7 +15,7 @@ Examples:
   python3 eversolo_client.py --host 192.168.1.50 play-pause
   python3 eversolo_client.py --host 192.168.1.50 volume 35
   python3 eversolo_client.py --host 192.168.1.50 key VolumeUp
-  python3 eversolo_client.py --host 192.168.1.50 loop 2        # 0=list 1=single 2=shuffle
+  python3 eversolo_client.py --host 192.168.1.50 loop 2        # 0=repeat all 1=repeat one 2=shuffle 3=play once
 """
 import argparse
 import json
@@ -32,7 +32,7 @@ MUSIC = "/ZidooMusicControl/v2"
 CTRL = "/ZidooControlCenter"
 
 STATE_NAMES = {0: "idle", 1: "preparing", 2: "prepared", 3: "playing", 4: "paused"}
-LOOP_NAMES = {0: "list", 1: "single", 2: "shuffle"}
+LOOP_NAMES = {0: "repeat_all", 1: "repeat_one", 2: "shuffle", 3: "play_once"}
 
 
 class EversoloClient:
@@ -171,9 +171,9 @@ def main():
     sub.add_parser("play-pause")
     sub.add_parser("next")
     sub.add_parser("prev")
-    p = sub.add_parser("seek"); p.add_argument("value", type=int)
+    p = sub.add_parser("seek"); p.add_argument("value", type=int, help="position in milliseconds")
     p = sub.add_parser("volume"); p.add_argument("level", type=int, nargs="?")
-    p = sub.add_parser("loop"); p.add_argument("mode", type=int, choices=[0, 1, 2])
+    p = sub.add_parser("loop"); p.add_argument("mode", type=int, choices=[0, 1, 2, 3])
     p = sub.add_parser("key"); p.add_argument("name")
     sub.add_parser("queue")
     sub.add_parser("features")

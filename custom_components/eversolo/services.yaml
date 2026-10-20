@@ -8,6 +8,7 @@ set_input:
           domain: media_player
     name:
       required: true
+      example: Internal player
       selector:
         text:
 set_output:
@@ -20,23 +21,9 @@ set_output:
           domain: media_player
     name:
       required: true
+      example: BAL-XLR
       selector:
         text:
-set_vu_mode:
-  fields:
-    entity_id:
-      required: true
-      selector:
-        entity:
-          integration: eversolo
-          domain: media_player
-    mode:
-      required: true
-      selector:
-        select:
-          options:
-            - vu
-            - spectrum
 set_loop_mode:
   fields:
     entity_id:
@@ -49,10 +36,53 @@ set_loop_mode:
       required: true
       selector:
         select:
+          translation_key: loop_mode
           options:
-            - list
-            - single
+            - repeat_all
+            - repeat_one
             - shuffle
+            - play_once
+vu_next:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+spectrum_next:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+open_app:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    name:
+      required: true
+      example: TIDAL
+      selector:
+        text:
+power:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: eversolo
+          domain: media_player
+    name:
+      required: true
+      selector:
+        text:
 request:
   fields:
     entity_id:
@@ -63,6 +93,6 @@ request:
           domain: media_player
     path:
       required: true
-      example: /ZidooMusicControl/v2/getState
+      example: /ZidooMusicControl/v2/getPowerOption
       selector:
         text:

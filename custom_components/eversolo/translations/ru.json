@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Устройство Eversolo",
-        "description": "Задайте плееру имя (оно станет префиксом id сущностей, например media_player.eversolo) и введите его IP-адрес. Порт API по умолчанию — 9529.",
+        "description": "Задайте плееру имя (оно станет префиксом id сущностей, например media_player.eversolo) и введите его IP-адрес. Порт API по умолчанию — 9529. Когда на экране плеера появится запрос, разрешите Home Assistant.",
         "data": {
           "name": "Название",
           "host": "Адрес (IP)",
@@ -12,28 +12,15 @@
       },
       "authorize": {
         "title": "Подтвердите на устройстве",
-        "description": "Откройте запрос подтверждения на экране Eversolo (адрес {host}), разрешите Home Assistant и нажмите «Отправить»."
+        "description": "Плеер ({host}) не подтвердил подключение вовремя. Нажмите «Отправить» и разрешите Home Assistant на экране Eversolo."
       }
     },
     "error": {
       "cannot_connect": "Устройство не отвечает. Проверьте адрес и что оно в той же сети.",
-      "not_authorized": "Устройство ещё не подтвердило подключение."
+      "not_authorized": "Устройство не подтвердило подключение."
     },
     "abort": {
       "already_configured": "Это устройство уже добавлено."
-    }
-  },
-  "entity": {
-    "select": {
-      "input": {
-        "name": "Вход"
-      },
-      "output": {
-        "name": "Выход"
-      },
-      "vu": {
-        "name": "Индикаторы"
-      }
     }
   },
   "options": {
@@ -50,7 +37,144 @@
     },
     "error": {
       "cannot_connect": "Устройство не отвечает. Проверьте адрес и что оно в той же сети.",
-      "not_authorized": "Устройство ещё не подтвердило подключение."
+      "not_authorized": "Устройство не подтвердило подключение."
+    }
+  },
+  "entity": {
+    "select": {
+      "input": {
+        "name": "Вход"
+      },
+      "output": {
+        "name": "Выход"
+      },
+      "app": {
+        "name": "Приложение"
+      }
+    },
+    "button": {
+      "vu": {
+        "name": "VU-индикатор: следующий режим"
+      },
+      "spectrum": {
+        "name": "Спектр: следующий режим"
+      }
+    }
+  },
+  "selector": {
+    "loop_mode": {
+      "options": {
+        "repeat_all": "Повтор списка",
+        "repeat_one": "Повтор трека",
+        "shuffle": "Случайный порядок",
+        "play_once": "Список один раз"
+      }
+    }
+  },
+  "services": {
+    "set_input": {
+      "name": "Выбрать вход",
+      "description": "Переключить вход устройства.",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        },
+        "name": {
+          "name": "Название",
+          "description": "Название или tag входа из input_list."
+        }
+      }
+    },
+    "set_output": {
+      "name": "Выбрать выход",
+      "description": "Переключить выход устройства.",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        },
+        "name": {
+          "name": "Название",
+          "description": "Название или tag выхода из output_list."
+        }
+      }
+    },
+    "set_loop_mode": {
+      "name": "Режим повтора",
+      "description": "Повтор списка, повтор трека, случайный порядок или список один раз.",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        },
+        "mode": {
+          "name": "Режим",
+          "description": "Режим повтора."
+        }
+      }
+    },
+    "vu_next": {
+      "name": "VU-индикатор: следующий режим",
+      "description": "То же, что кнопка VU в приложении Eversolo.",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        }
+      }
+    },
+    "spectrum_next": {
+      "name": "Спектр: следующий режим",
+      "description": "То же, что кнопка спектра в приложении Eversolo.",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        }
+      }
+    },
+    "open_app": {
+      "name": "Открыть приложение",
+      "description": "Открыть приложение, установленное на устройстве (см. app_list).",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        },
+        "name": {
+          "name": "Название",
+          "description": "Название приложения или имя пакета."
+        }
+      }
+    },
+    "power": {
+      "name": "Меню питания",
+      "description": "Выполнить пункт меню питания устройства (см. power_list).",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        },
+        "name": {
+          "name": "Название",
+          "description": "Название пункта из power_list или его tag."
+        }
+      }
+    },
+    "request": {
+      "name": "Сырой запрос",
+      "description": "GET-запрос к любому пути API устройства, возвращает ответ.",
+      "fields": {
+        "entity_id": {
+          "name": "Плеер",
+          "description": "Сущность медиаплеера Eversolo."
+        },
+        "path": {
+          "name": "Путь",
+          "description": "Путь API, начинается с /."
+        }
+      }
     }
   }
 }

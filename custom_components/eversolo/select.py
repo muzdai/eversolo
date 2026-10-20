@@ -1,4 +1,4 @@
-"""Select entities: inputs, outputs, VU/spectrum view."""
+"""Select entities: input, output and streaming app on the device."""
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
@@ -6,29 +6,28 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, VU_OPEN_TYPE
+from .const import DOMAIN
 from .coordinator import EversoloCoordinator
 from .entity import EversoloEntity
-
-VU_OPTIONS = {"vu": "VU meter", "spectrum": "Spectrum"}
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: EversoloCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         [
-            EversoloListSelect(coordinator, entry, "input", "Input", "inputs"),
-            EversoloListSelect(coordinator, entry, "output", "Output", "outputs"),
-            EversoloVuSelect(coordinator, entry),
+            EversoloListSelect(coordinator, entry, "input", "inputs"),
+            EversoloListSelect(coordinator, entry, "output", "outputs"),
+            EversoloAppSelect(coordinator, entry),
         ]
     )
 
 
 class EversoloListSelect(EversoloEntity, SelectEntity):
-    def __init__(self, coordinator, entry, key, label, bucket) -> None:
+    """Input or output, read from getInputAndOutputList and set like the app does."""
+
+    def __init__(self, coordinator: EversoloCoordinator, entry: ConfigEntry, key: str, bucket: str) -> None:
         super().__init__(coordinator, entry, key)
         self._attr_translation_key = key
-        self._attr_name = label
         self._bucket = bucket
 
     @property
@@ -57,20 +56,34 @@ class EversoloListSelect(EversoloEntity, SelectEntity):
                 return
 
 
-class EversoloVuSelect(EversoloEntity, SelectEntity):
-    _attr_name = "Meter display"
-    _attr_options = list(VU_OPTIONS.values())
+class EversoloAppSelect(EversoloEntity, SelectEntity):
+    """Open a streaming app installed on the device (Tidal, Qobuz, ...).
 
-    def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "vu")
-        self._attr_translation_key = "vu"
+    The device does not report which app is in front, so the state is the
+    last app opened from Home Assistant in this session.
+    """
+
+    _attr_translation_key = "app"
+
+    def __init__(self, coordinator: EversoloCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "app")
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self.coordinator.apps)
+
+    @property
+    def options(self) -> list[str]:
+        return [a["name"] for a in self.coordinator.apps]
 
     @property
     def current_option(self) -> str | None:
-        mode = {0: "vu", 1: "spectrum"}.get(self.coordinator.data.get("vuDisplayMode"))
-        return VU_OPTIONS.get(mode)
+        return self.coordinator.last_app if self.coordinator.last_app in self.options else None
 
     async def async_select_option(self, option: str) -> None:
-        mode = next(k for k, v in VU_OPTIONS.items() if v == option)
-        await self.coordinator.api.set_vu(VU_OPEN_TYPE[mode])
-        await self.coordinator.async_request_refresh()
+        for app in self.coordinator.apps:
+            if app["name"] == option:
+                await self.coordinator.api.open_app(app["package"])
+                self.coordinator.last_app = option
+                self.coordinator.async_update_listeners()
+                return

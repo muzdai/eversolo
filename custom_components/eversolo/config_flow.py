@@ -6,10 +6,10 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import EversoloApi, EversoloError
 from .const import (
@@ -17,6 +17,7 @@ from .const import (
     CONF_CLIENT_UUID,
     CONF_FIRMWARE,
     CONF_HOST,
+    CONF_MODEL,
     CONF_NAME,
     CONF_PORT,
     DEFAULT_NAME,
@@ -38,17 +39,25 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         self._name: str = DEFAULT_NAME
         self._host: str = ""
         self._port: int = DEFAULT_PORT
+        self._model: str | None = None
         self._client_uuid: str = str(uuid.uuid4())
 
-    def _api(self, host: str, port: int) -> EversoloApi:
-        return EversoloApi(async_get_clientsession(self.hass), host, port)
+    def _api(self) -> EversoloApi:
+        return EversoloApi(async_get_clientsession(self.hass), self._host, self._port)
 
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
+        # TXT records carry what the app reads in DiscoverManager: name is the model
+        # (e.g. DMP-A6), deviceName the name set on the device, uuid / net_mac its ids.
+        props = {k: v for k, v in (discovery_info.properties or {}).items() if isinstance(v, str)}
         self._host = discovery_info.host
-        await self.async_set_unique_id(discovery_info.host)
-        self._abort_if_unique_id_configured()
-        # The mDNS instance name is the device UUID, so show the model name instead.
-        self.context["title_placeholders"] = {"name": DEFAULT_NAME}
+        self._port = int(props.get("port") or discovery_info.port or DEFAULT_PORT)
+        self._model = props.get("name") or None
+        self._name = props.get("deviceName") or self._model or DEFAULT_NAME
+        # Already added (manually or earlier): match by address as well as by id.
+        self._async_abort_entries_match({CONF_HOST: self._host})
+        await self.async_set_unique_id(props.get("uuid") or discovery_info.host)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: self._host, CONF_PORT: self._port})
+        self.context["title_placeholders"] = {"name": self._name}
         return await self.async_step_user()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -58,9 +67,7 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
             self._host = user_input[CONF_HOST].strip()
             self._port = user_input.get(CONF_PORT, DEFAULT_PORT)
             try:
-                resp = await self._api(self._host, self._port).connect(
-                    CLIENT_NAME, self._client_uuid, ask_authority=False
-                )
+                resp = await self._api().connect(CLIENT_NAME, self._client_uuid, ask_authority=False)
             except EversoloError:
                 errors["base"] = "cannot_connect"
             else:
@@ -80,14 +87,11 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    async def _async_request_authority(self, errors: dict[str, str] | None = None) -> ConfigFlowResult:
+    async def _async_request_authority(self) -> ConfigFlowResult:
         """Send tag=1 right away; it blocks until the user answers on the device or it times out."""
         try:
-            resp = await self._api(self._host, self._port).connect(
-                CLIENT_NAME, self._client_uuid, ask_authority=True
-            )
+            resp = await self._api().connect(CLIENT_NAME, self._client_uuid, ask_authority=True)
         except EversoloError:
-            resp = {}
             errors = {"base": "cannot_connect"}
         else:
             if resp.get("status") == 200:
@@ -106,8 +110,9 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_finish(self, resp: dict) -> ConfigFlowResult:
         device = resp.get("device") if isinstance(resp.get("device"), dict) else {}
-        duuid = resp.get("duuid") or device.get("duuid") or resp.get("net_mac") or self._host
-        await self.async_set_unique_id(str(duuid))
+        duuid = resp.get("duuid") or device.get("uuid") or resp.get("net_mac") or self._host
+        model = self._model or device.get("name") or resp.get("model")
+        await self.async_set_unique_id(str(duuid), raise_on_progress=False)
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._host, CONF_PORT: self._port})
         return self.async_create_entry(
             title=self._name,
@@ -116,6 +121,7 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PORT: self._port,
                 CONF_CLIENT_UUID: self._client_uuid,
                 CONF_FIRMWARE: resp.get("firmware"),
+                CONF_MODEL: model,
             },
         )
 
