@@ -47,7 +47,8 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         self._host = discovery_info.host
         await self.async_set_unique_id(discovery_info.host)
         self._abort_if_unique_id_configured()
-        self.context["title_placeholders"] = {"name": discovery_info.name.split(".")[0]}
+        # The mDNS instance name is the device UUID, so show the model name instead.
+        self.context["title_placeholders"] = {"name": DEFAULT_NAME}
         return await self.async_step_user()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -66,7 +67,8 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
                 if resp.get("status") == 200:
                     return await self._async_finish(resp)
                 if resp.get("status") == -2:
-                    return await self.async_step_authorize()
+                    # The device shows its own prompt now and waits for an answer.
+                    return await self._async_request_authority()
                 errors["base"] = "cannot_connect"
 
         schema = vol.Schema(
@@ -78,25 +80,29 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    async def async_step_authorize(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                resp = await self._api(self._host, self._port).connect(
-                    CLIENT_NAME, self._client_uuid, ask_authority=True
-                )
-            except EversoloError:
-                errors["base"] = "cannot_connect"
-            else:
-                if resp.get("status") == 200:
-                    return await self._async_finish(resp)
-                errors["base"] = "not_authorized"
+    async def _async_request_authority(self, errors: dict[str, str] | None = None) -> ConfigFlowResult:
+        """Send tag=1 right away; it blocks until the user answers on the device or it times out."""
+        try:
+            resp = await self._api(self._host, self._port).connect(
+                CLIENT_NAME, self._client_uuid, ask_authority=True
+            )
+        except EversoloError:
+            resp = {}
+            errors = {"base": "cannot_connect"}
+        else:
+            if resp.get("status") == 200:
+                return await self._async_finish(resp)
+            errors = {"base": "not_authorized"}
         return self.async_show_form(
             step_id="authorize",
             data_schema=vol.Schema({}),
             errors=errors,
             description_placeholders={"host": self._host},
         )
+
+    async def async_step_authorize(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        # Retry after a timeout or refusal: ask the device again.
+        return await self._async_request_authority()
 
     async def _async_finish(self, resp: dict) -> ConfigFlowResult:
         device = resp.get("device") if isinstance(resp.get("device"), dict) else {}
