@@ -3,9 +3,11 @@
  * - landscape / portrait layout from the screen orientation (landscape when unknown)
  * - background colours sampled from the album cover (ambient style)
  * - DSP / EQ / sub status, spectrum and VU buttons, menu with inputs, outputs, apps, power
+ * - decorative level bars behind the controls while playing (the device does not expose
+ *   real levels over its API, so these are animated, not measured)
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.2.2";
+const EVERSOLO_CARD_VERSION = "2.3.0";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -101,7 +103,7 @@ class EversoloPlayerCard extends HTMLElement {
     if (config.layout && !["auto", "landscape", "portrait"].includes(config.layout)) {
       throw new Error("eversolo-player-card: layout must be auto, landscape or portrait");
     }
-    this._config = { show_background: true, show_volume: true, show_chips: false, layout: "auto", ...config };
+    this._config = { show_background: true, show_spectrum: true, show_volume: true, show_chips: false, layout: "auto", ...config };
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
       this._build();
@@ -147,6 +149,8 @@ class EversoloPlayerCard extends HTMLElement {
     if (this._mq) this._mq.removeEventListener("change", this._mqListener);
     window.removeEventListener("eversolo-icons-loaded", this._iconsListener);
     clearInterval(this._tick);
+    this._specOn = false;
+    cancelAnimationFrame(this._raf);
   }
 
   _t(key) {
@@ -161,12 +165,16 @@ class EversoloPlayerCard extends HTMLElement {
         :host { display:block; position:relative; border-radius:var(--ha-card-border-radius, 20px); overflow:hidden;
                 --c1:#3a2a22; --c2:#140f0d; --accent:#d9925a; color:#f4f1ee;
                 font-family:var(--ha-font-family-body, system-ui, sans-serif); }
+        .amb { position:absolute; left:-15%; top:-15%; width:130%; height:130%; object-fit:cover;
+               filter: blur(60px) saturate(1.6) brightness(.7); opacity:0; transition: opacity .9s ease; }
+        .amb.on { opacity:.95; }
         .bg { position:absolute; inset:-30%; background:
                 radial-gradient(50% 60% at 25% 30%, var(--c1), transparent 72%),
                 radial-gradient(55% 65% at 85% 80%, var(--c2), transparent 75%),
                 #0d0b0a;
               filter: blur(42px) saturate(1.15); transition: background 0.8s ease; }
         .bg.off { background:#0d0b0a; }
+        .amb.on + .bg { opacity:.55; }
         .shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.6)); }
         .wrap { position:relative; padding:14px 20px 18px; container-type:inline-size; }
 
@@ -193,7 +201,10 @@ class EversoloPlayerCard extends HTMLElement {
         .cover .ph { position:absolute; inset:0; display:grid; place-items:center; }
         .cover .ph svg { width:38%; opacity:.3; fill:#fff; }
 
-        .info { min-width:0; width:100%; display:grid; gap:clamp(4px, .9cqw, 10px); }
+        .info { position:relative; min-width:0; width:100%; display:grid; gap:clamp(4px, .9cqw, 10px); }
+        .info > :not(.spec) { position:relative; z-index:1; }
+        .spec { position:absolute; left:-6px; right:-6px; bottom:0; height:64%; z-index:0; pointer-events:none;
+                width:calc(100% + 12px); opacity:.6; }
         .title { font-size:clamp(20px, 4.2cqw, 44px); font-weight:500; line-height:1.15;
                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .artist, .album { font-size:clamp(14px, 2.6cqw, 28px); opacity:.62; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -250,7 +261,7 @@ class EversoloPlayerCard extends HTMLElement {
         .menu .it small { opacity:.55; }
         .unavail { padding:24px; text-align:center; opacity:.7; }
       </style>
-      <div class="bg" id="bg"></div><div class="shade"></div>
+      <img class="amb" id="amb" alt=""><div class="bg" id="bg"></div><div class="shade"></div>
       <div class="wrap" id="wrap"></div>
       <div class="menu" id="menu" hidden></div>`;
     this._root = this.shadowRoot;
@@ -301,6 +312,7 @@ class EversoloPlayerCard extends HTMLElement {
         <div class="main">
           <div class="cover"><div class="ph">${svg(BASE_ICONS.music)}</div><img id="cover" alt="" hidden></div>
           <div class="info">
+            <canvas class="spec" id="spec"></canvas>
             <div class="title" id="title"></div>
             <div class="artist" id="artist"></div>
             <div class="album" id="album"></div>
@@ -375,6 +387,7 @@ class EversoloPlayerCard extends HTMLElement {
     set("lvl", a.volume_display ?? (a.volume_level != null ? Math.round(a.volume_level * 100) : ""));
 
     this._updateProgress();
+    this._setSpectrum(playing && this._config.show_spectrum !== false);
     this._renderChips(a);
     this._updateCover(a.entity_picture_local || a.entity_picture);
     this._updateBackground(!!this._config.show_background);
@@ -444,8 +457,19 @@ class EversoloPlayerCard extends HTMLElement {
 
   _updateCover(url) {
     const img = this._root.getElementById("cover");
+    const amb = this._root.getElementById("amb");
     if (!img) return;
-    if (!url) { img.hidden = true; this._coverSrc = null; this._setColors(null); return; }
+    if (!url) {
+      img.hidden = true; this._coverSrc = null; this._setColors(null);
+      if (amb) { amb.classList.remove("on"); amb.removeAttribute("src"); }
+      return;
+    }
+    if (amb && amb.dataset.src !== url && this._config.show_background) {
+      amb.dataset.src = url;
+      amb.onload = () => amb.classList.add("on");
+      amb.onerror = () => amb.classList.remove("on");
+      amb.src = url;
+    }
     if (this._coverSrc === url) return;
     this._coverSrc = url;
     img.crossOrigin = "anonymous";
@@ -465,12 +489,86 @@ class EversoloPlayerCard extends HTMLElement {
     this.style.setProperty("--c2", rgb(dim(colors.secondary, 0.55), 0.9));
     // Accent: the cover's dominant hue, lifted so it reads on the dark background.
     const p = colors.primary, max = Math.max(...p) || 1, lift = Math.max(1, 215 / max);
-    this.style.setProperty("--accent", rgb(p.map((v) => Math.min(255, v * lift))));
+    this._accent = rgb(p.map((v) => Math.min(255, v * lift)));
+    this.style.setProperty("--accent", this._accent);
   }
 
   _updateBackground(enabled) {
     const bg = this._root.getElementById("bg");
     if (bg) bg.style.display = enabled ? "" : "none";
+    const amb = this._root.getElementById("amb");
+    if (amb) amb.style.display = enabled ? "" : "none";
+  }
+
+  /* ---- decorative level bars ----------------------------------------
+   * Segmented bars like the Eversolo screen. The device API has no level data,
+   * so the motion is generated: a falling-off spectrum envelope, random energy
+   * per band, a light pulse and slowly falling peak caps. Paused -> bars sink. */
+  _setSpectrum(playing) {
+    this._specPlaying = playing;
+    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if ((playing && !reduced) && !this._specOn) {
+      this._specOn = true;
+      this._raf = requestAnimationFrame((t) => this._specFrame(t));
+    }
+  }
+
+  _specFrame(ts) {
+    if (!this._specOn) return;
+    const next = () => { this._raf = requestAnimationFrame((t) => this._specFrame(t)); };
+    if (ts - (this._specLast || 0) < 33) return next(); // ~30 fps is plenty
+    this._specLast = ts;
+    const c = this._root && this._root.getElementById("spec");
+    if (!c || !c.clientWidth) return next();
+    const dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+      c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+    }
+    const barW = Math.max(8, Math.min(18, w / 34)), gap = barW * 0.45;
+    const n = Math.max(6, Math.floor((w + gap) / (barW + gap)));
+    if (!this._lv || this._lv.length !== n) {
+      this._lv = new Array(n).fill(0); this._tg = new Array(n).fill(0); this._pk = new Array(n).fill(0);
+    }
+    const lv = this._lv, tg = this._tg, pk = this._pk;
+    if (ts - (this._specRetarget || 0) > 110) {
+      this._specRetarget = ts;
+      const pulse = Math.sin(ts / 235) > 0.55 ? 0.22 : 0;
+      for (let i = 0; i < n; i++) {
+        const f = i / (n - 1);
+        const env = 0.92 - 0.5 * f + 0.14 * Math.sin(ts / 900 + i * 0.7);
+        tg[i] = this._specPlaying ? Math.min(1, Math.max(0.04, env * (0.3 + 0.7 * Math.random()) + pulse * (1 - f))) : 0;
+      }
+    }
+    let alive = false;
+    for (let i = 0; i < n; i++) {
+      lv[i] += (tg[i] - lv[i]) * (tg[i] > lv[i] ? 0.45 : 0.16);
+      pk[i] = Math.max(lv[i], pk[i] - 0.01);
+      if (pk[i] > 0.01) alive = true;
+    }
+    const ctx = c.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const segH = Math.max(3, h / 30), segGap = segH * 0.55, step = segH + segGap;
+    const rows = Math.floor(h / step);
+    const x0 = (w - (n * barW + (n - 1) * gap)) / 2;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * (barW + gap);
+      const on = Math.round(lv[i] * rows);
+      for (let r = 0; r < rows; r++) {
+        ctx.fillStyle = r < on ? "rgba(255,255,255,0.42)" : "rgba(255,255,255,0.05)";
+        ctx.fillRect(x, h - (r + 1) * step + segGap, barW, segH);
+      }
+      const pr = Math.round(pk[i] * rows);
+      if (pr > 0) {
+        ctx.fillStyle = this._accent || "rgba(255,210,170,0.7)";
+        ctx.globalAlpha = 0.75;
+        ctx.fillRect(x, h - pr * step - step + segGap, barW, segH);
+        ctx.globalAlpha = 1;
+      }
+    }
+    if (!this._specPlaying && !alive) { this._specOn = false; return; }
+    next();
   }
 
   /* ---- interaction ------------------------------------------------- */
