@@ -142,28 +142,28 @@ def _async_register_services(hass: HomeAssistant) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         item = _resolve(coord.io["inputs"], call.data[ATTR_NAME], "tag")
         await coord.api.set_input(item["tag"], item["index"])
-        await coord.async_request_refresh()
+        coord.select_io("inputs", item["index"])
 
     async def set_output(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         item = _resolve(coord.io["outputs"], call.data[ATTR_NAME], "tag")
         await coord.api.set_output(item["tag"], item["index"])
-        await coord.async_request_refresh()
+        coord.select_io("outputs", item["index"])
 
     async def set_loop_mode(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         await coord.api.set_loop(LOOP_MODES[call.data["mode"]])
-        await coord.async_request_refresh()
+        coord.apply(state={"loopModel": LOOP_MODES[call.data["mode"]]})
 
     async def vu_next(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         await coord.api.vu_next()
-        await coord.async_request_refresh()
+        coord.confirm_later()
 
     async def spectrum_next(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         await coord.api.spectrum_next()
-        await coord.async_request_refresh()
+        coord.confirm_later()
 
     async def open_app(call: ServiceCall) -> None:
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])

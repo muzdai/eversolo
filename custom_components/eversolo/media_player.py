@@ -13,6 +13,7 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_MODEL,
@@ -292,21 +293,35 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
 
     # ---- actions -------------------------------------------------------
     async def _refresh(self) -> None:
-        await self.coordinator.async_request_refresh()
+        self.coordinator.confirm_later()
+
+    def _apply_playing(self, playing: bool) -> None:
+        """Flip play/pause in the UI at once: the device takes a moment to report it."""
+        if self._external:
+            self.coordinator.apply(info={"playStatus": 1 if playing else 2})
+        else:
+            # Keep the shown position where it is now, then switch state.
+            pos = self.media_position
+            changes = {"state": STATE_PLAYING if playing else STATE_PAUSED}
+            if pos is not None and self.state == MediaPlayerState.PLAYING and self.media_position_updated_at:
+                elapsed = (dt_util.utcnow() - self.media_position_updated_at).total_seconds()
+                changes["position"] = int((pos + max(0.0, elapsed)) * 1000)
+            self.coordinator.apply(state=changes)
 
     async def async_media_play(self) -> None:
         if self.state != MediaPlayerState.PLAYING:
             await self.coordinator.api.play_pause()
-            await self._refresh()
+            self._apply_playing(True)
 
     async def async_media_pause(self) -> None:
         if self.state == MediaPlayerState.PLAYING:
             await self.coordinator.api.play_pause()
-            await self._refresh()
+            self._apply_playing(False)
 
     async def async_media_play_pause(self) -> None:
+        playing = self.state == MediaPlayerState.PLAYING
         await self.coordinator.api.play_pause()
-        await self._refresh()
+        self._apply_playing(not playing)
 
     async def async_media_next_track(self) -> None:
         await self.coordinator.api.next_track()
@@ -317,16 +332,21 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         await self._refresh()
 
     async def async_media_seek(self, position: float) -> None:
-        await self.coordinator.api.seek(int(position * 1000))
-        await self._refresh()
+        ms = int(position * 1000)
+        await self.coordinator.api.seek(ms)
+        if self._external:
+            self.coordinator.apply(info={"currentPosition": ms})
+        else:
+            self.coordinator.apply(state={"position": ms})
 
     async def async_set_volume_level(self, volume: float) -> None:
         # Same as the app: value = slider step * mMargin, slider max = maxVolume / mMargin.
         mx = self._volume.get("maxVolume") or 100
         step = self._volume.get("mMargin") or 1
         value = round(volume * mx / step) * step
-        await self.coordinator.api.set_volume(max(0, min(mx, value)))
-        await self._refresh()
+        value = max(0, min(mx, value))
+        await self.coordinator.api.set_volume(value)
+        self.coordinator.apply(volume={"currenttVolume": value})
 
     async def async_volume_up(self) -> None:
         await self.coordinator.api.key("VolumeUp")
@@ -339,19 +359,20 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
     async def async_mute_volume(self, mute: bool) -> None:
         if bool(self.is_volume_muted) != mute:
             await self.coordinator.api.key("Mute")
-            await self._refresh()
+            self.coordinator.apply(volume={"isMute": mute})
 
     async def async_set_repeat(self, repeat: RepeatMode) -> None:
         await self.coordinator.api.set_loop(REPEAT_TO_LOOP[repeat])
-        await self._refresh()
+        self.coordinator.apply(state={"loopModel": REPEAT_TO_LOOP[repeat]})
 
     async def async_set_shuffle(self, shuffle: bool) -> None:
-        await self.coordinator.api.set_loop(LOOP_SHUFFLE if shuffle else LOOP_REPEAT_ALL)
-        await self._refresh()
+        mode = LOOP_SHUFFLE if shuffle else LOOP_REPEAT_ALL
+        await self.coordinator.api.set_loop(mode)
+        self.coordinator.apply(state={"loopModel": mode})
 
     async def async_select_source(self, source: str) -> None:
         for item in self.coordinator.io["inputs"]:
             if item["name"] == source:
                 await self.coordinator.api.set_input(item["tag"], item["index"])
-                await self._refresh()
+                self.coordinator.select_io("inputs", item["index"])
                 return

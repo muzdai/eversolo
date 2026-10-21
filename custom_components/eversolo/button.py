@@ -47,7 +47,7 @@ class EversoloDisplayButton(EversoloEntity, ButtonEntity):
             await self.coordinator.api.vu_next()
         else:
             await self.coordinator.api.spectrum_next()
-        await self.coordinator.async_request_refresh()
+        self.coordinator.confirm_later()
 
 
 class EversoloPowerButton(EversoloEntity, ButtonEntity):

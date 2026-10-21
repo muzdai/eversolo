@@ -7,7 +7,7 @@
  *   real levels over its API, so these are animated, not measured)
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.3.3";
+const EVERSOLO_CARD_VERSION = "2.4.0";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -360,7 +360,9 @@ class EversoloPlayerCard extends HTMLElement {
     set("out", out);
     byId("outrow").classList.toggle("hide", !out);
 
-    const playing = st.state === "playing";
+    let playing = st.state === "playing";
+    const hold = this._playHold;
+    if (hold && Date.now() < hold.until && st.last_updated === hold.stamp) playing = hold.playing;
     const playBtn = byId("play");
     const playIcon = playing ? BASE_ICONS.pause : BASE_ICONS.play;
     if (playBtn.dataset.icon !== playIcon) { playBtn.innerHTML = svg(playIcon); playBtn.dataset.icon = playIcon; }
@@ -446,6 +448,11 @@ class EversoloPlayerCard extends HTMLElement {
     let pos = Number(a.media_position) || 0;
     if (st.state === "playing" && a.media_position_updated_at) {
       pos += (Date.now() - Date.parse(a.media_position_updated_at)) / 1000;
+    }
+    // Right after a seek, show the chosen position until the player reports the new one.
+    const sh = this._seekHold;
+    if (sh && Date.now() < sh.until && a.media_position_updated_at === sh.stamp) {
+      pos = sh.pos + (st.state === "playing" ? (Date.now() - sh.at) / 1000 : 0);
     }
     if (dur) pos = Math.min(pos, dur);
     const ratio = dur ? pos / dur : 0;
@@ -598,7 +605,12 @@ class EversoloPlayerCard extends HTMLElement {
     }
     if (btn.dataset.list) return this._openList(btn.dataset.list);
     switch (btn.dataset.act) {
-      case "play": return this._call("media_player", "media_play_pause", { entity_id: entity });
+      case "play": {
+        const st = this._state();
+        this._playHold = { playing: st.state !== "playing", stamp: st.last_updated, until: Date.now() + 3000 };
+        this._render();
+        return this._call("media_player", "media_play_pause", { entity_id: entity });
+      }
       case "prev": return this._call("media_player", "media_previous_track", { entity_id: entity });
       case "next": return this._call("media_player", "media_next_track", { entity_id: entity });
       case "mute": {
@@ -686,7 +698,10 @@ class EversoloPlayerCard extends HTMLElement {
       window.removeEventListener("pointerup", up);
       this._seeking = false;
       const target = seek(e);
-      if (target != null) this._call("media_player", "media_seek", { entity_id: this._config.entity, seek_position: target });
+      if (target != null) {
+        this._seekHold = { pos: target, at: Date.now(), until: Date.now() + 4000, stamp: this._state()?.attributes.media_position_updated_at };
+        this._call("media_player", "media_seek", { entity_id: this._config.entity, seek_position: target });
+      }
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);

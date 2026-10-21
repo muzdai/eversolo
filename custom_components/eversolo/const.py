@@ -4,7 +4,7 @@ Values below are taken from the decompiled Eversolo Controller app (see docs/pro
 """
 
 DOMAIN = "eversolo"
-VERSION = "2.3.3"
+VERSION = "2.4.0"
 
 CONF_NAME = "name"
 CONF_HOST = "host"
@@ -21,6 +21,8 @@ MDNS_SERVICE_TYPE = "_eversolo._tcp.local."
 
 # The app polls getState and getInputAndOutputList every 2 s.
 SCAN_INTERVAL_SECONDS = 2
+# After a command, read the device back once it has had time to act on it.
+CONFIRM_DELAY_SECONDS = 1.0
 # Power menu and streaming-app list change rarely.
 SLOW_REFRESH_SECONDS = 300
 

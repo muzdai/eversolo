@@ -52,7 +52,7 @@ class EversoloListSelect(EversoloEntity, SelectEntity):
                     await self.coordinator.api.set_input(item["tag"], item["index"])
                 else:
                     await self.coordinator.api.set_output(item["tag"], item["index"])
-                await self.coordinator.async_request_refresh()
+                self.coordinator.select_io(self._bucket, item["index"])
                 return
 
 
