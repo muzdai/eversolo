@@ -5,7 +5,7 @@
  * - DSP / EQ / sub status, spectrum and VU buttons, menu with inputs, outputs, apps, power
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.2.0";
+const EVERSOLO_CARD_VERSION = "2.2.1";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",

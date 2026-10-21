@@ -16,12 +16,14 @@ class EversoloEntity(CoordinatorEntity[EversoloCoordinator]):
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{key}"
+        # getState carries deviceInfo {model, version} on current firmware.
+        info = (coordinator.data or {}).get("deviceInfo") or {}
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Eversolo",
-            model=entry.data.get(CONF_MODEL) or DEFAULT_MODEL,
-            sw_version=entry.data.get(CONF_FIRMWARE),
+            model=info.get("model") or entry.data.get(CONF_MODEL) or DEFAULT_MODEL,
+            sw_version=info.get("version") or entry.data.get(CONF_FIRMWARE),
             configuration_url=coordinator.api.base,
         )
 

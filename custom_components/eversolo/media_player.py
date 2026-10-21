@@ -260,7 +260,8 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
             "app_list": [a["name"] for a in self.coordinator.apps],
             "app": self.coordinator.last_app,
             "power_list": [p["name"] for p in self.coordinator.power_options],
-            "codec": music.get("codec") or audio.get("audioDecodec"),
+            # Real devices put the file format in playingMusic.extension ("FLAC").
+            "codec": music.get("codec") or music.get("extension") or audio.get("audioDecodec") or None,
             "sample_rate": music.get("sampleRate") or (f"{audio_rate / 1000:g} kHz" if audio_rate else None),
             "bits": music.get("bits") or audio.get("audioBitsPerSample") or None,
             "output_format": " · ".join(
@@ -278,7 +279,9 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
             "output_bits": out.get("outPutBits") or None,
             "channels": music.get("channels") or audio.get("audioChannels") or None,
             "bitrate": music.get("bitrate") or None,
-            "source_name": self._info.get("playTypeSubtitle") or None,
+            # Streaming services name themselves in playingMusic.streamId ("qobuz");
+            # playTypeSubtitle is generic ("LOCAL") for everything in the library player.
+            "source_name": music.get("streamId") or self._info.get("playTypeSubtitle") or None,
             "dsp": flag("hasDspSetting", "dspActive"),
             "eq": flag("hasEQSetting", "eqActive"),
             "sub": flag("hasSubSetting", "subActive"),
