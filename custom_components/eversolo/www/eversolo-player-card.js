@@ -7,7 +7,7 @@
  *   real levels over its API, so these are animated, not measured)
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.3.0";
+const EVERSOLO_CARD_VERSION = "2.3.1";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",

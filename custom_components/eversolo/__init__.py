@@ -64,7 +64,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
-    """Serve the Lovelace card and the eversolo:* icon set on every page (once per HA run)."""
+    """Serve the card and the eversolo:* icon set (once per HA run).
+
+    The card goes in as a dashboard resource: dashboards wait for their resources
+    before creating cards, while extra modules load in parallel and can lose that
+    race (a panel view then keeps "Custom element doesn't exist"). The icon set
+    stays an extra module so eversolo:* icons work on every page.
+    """
     flag = f"{DOMAIN}_card_registered"
     if hass.data.get(flag):
         return
@@ -76,8 +82,42 @@ async def _async_register_card(hass: HomeAssistant) -> None:
             StaticPathConfig(ICONS_URL, os.path.join(www, "eversolo-icons.js"), False),
         ]
     )
-    frontend.add_extra_js_url(hass, f"{CARD_URL}?v={VERSION}")
     frontend.add_extra_js_url(hass, f"{ICONS_URL}?v={VERSION}")
+    if not await _async_register_card_resource(hass):
+        frontend.add_extra_js_url(hass, f"{CARD_URL}?v={VERSION}")
+
+
+async def _async_register_card_resource(hass: HomeAssistant) -> bool:
+    """Add or update the card's dashboard resource. False when resources are YAML-managed."""
+    lovelace = hass.data.get("lovelace")
+    resources = getattr(lovelace, "resources", None)
+    if resources is None and isinstance(lovelace, dict):
+        resources = lovelace.get("resources")
+    if resources is None or not hasattr(resources, "async_create_item"):
+        return False
+    try:
+        if not getattr(resources, "loaded", True):
+            await resources.async_load()
+            resources.loaded = True
+        url = f"{CARD_URL}?v={VERSION}"
+        found = False
+        for item in list(resources.async_items()):
+            item_url = str(item.get("url", ""))
+            if not item_url.split("?")[0].endswith("/eversolo-player-card.js"):
+                continue
+            if item_url.split("?")[0] == CARD_URL and not found:
+                found = True
+                if item_url != url or item.get("type") != "module":
+                    await resources.async_update_item(item["id"], {"res_type": "module", "url": url})
+            else:
+                # Older copies of this card (e.g. /local/eversolo-player-card.js) would load a stale version.
+                await resources.async_delete_item(item["id"])
+        if not found:
+            await resources.async_create_item({"res_type": "module", "url": url})
+    except Exception as err:  # noqa: BLE001 - never block setup on the frontend helper
+        _LOGGER.warning("Could not register the Eversolo card as a dashboard resource: %s", err)
+        return False
+    return True
 
 
 def _coordinator_for(hass: HomeAssistant, entity_id: str) -> EversoloCoordinator:
