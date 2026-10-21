@@ -7,7 +7,7 @@
  *   real levels over its API, so these are animated, not measured)
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.3.2";
+const EVERSOLO_CARD_VERSION = "2.3.3";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -507,9 +507,11 @@ class EversoloPlayerCard extends HTMLElement {
    * per band, a light pulse and slowly falling peak caps. Paused -> bars sink. */
   _setSpectrum(playing) {
     this._specPlaying = playing;
-    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // "Reduce motion" (e.g. Windows animation effects off) only calms the bars down: they
+    // are the point of the feature, so they are not switched off. show_spectrum: false does that.
+    this._specCalm = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     // Playing: animate. Paused/idle: draw the unlit segment grid once, like the device screen.
-    const wanted = playing ? !reduced : !this._specIdleDrawn;
+    const wanted = playing || !this._specIdleDrawn;
     if (wanted && !this._specOn) {
       this._specOn = true;
       this._raf = requestAnimationFrame((t) => this._specFrame(t));
@@ -534,7 +536,7 @@ class EversoloPlayerCard extends HTMLElement {
       this._lv = new Array(n).fill(0); this._tg = new Array(n).fill(0); this._pk = new Array(n).fill(0);
     }
     const lv = this._lv, tg = this._tg, pk = this._pk;
-    if (ts - (this._specRetarget || 0) > 110) {
+    if (ts - (this._specRetarget || 0) > (this._specCalm ? 280 : 110)) {
       this._specRetarget = ts;
       const pulse = Math.sin(ts / 235) > 0.55 ? 0.22 : 0;
       for (let i = 0; i < n; i++) {
