@@ -7,7 +7,7 @@
  *   real levels over its API, so these are animated, not measured)
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.3.1";
+const EVERSOLO_CARD_VERSION = "2.3.2";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -333,6 +333,7 @@ class EversoloPlayerCard extends HTMLElement {
       this._rendered = true;
       this._coverSrc = null;
       this._toolsHtml = null;
+      this._specIdleDrawn = false;
     }
     const a = st.attributes;
     const feat = Number(a.supported_features) || 0;
@@ -507,7 +508,9 @@ class EversoloPlayerCard extends HTMLElement {
   _setSpectrum(playing) {
     this._specPlaying = playing;
     const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if ((playing && !reduced) && !this._specOn) {
+    // Playing: animate. Paused/idle: draw the unlit segment grid once, like the device screen.
+    const wanted = playing ? !reduced : !this._specIdleDrawn;
+    if (wanted && !this._specOn) {
       this._specOn = true;
       this._raf = requestAnimationFrame((t) => this._specFrame(t));
     }
@@ -567,7 +570,7 @@ class EversoloPlayerCard extends HTMLElement {
         ctx.globalAlpha = 1;
       }
     }
-    if (!this._specPlaying && !alive) { this._specOn = false; return; }
+    if (!this._specPlaying && !alive) { this._specOn = false; this._specIdleDrawn = true; return; }
     next();
   }
 
