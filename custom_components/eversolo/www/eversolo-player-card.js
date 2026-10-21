@@ -3,7 +3,7 @@
  * - background colours sampled from the album cover (ambient style)
  * - inputs, outputs, VU / spectrum, streaming apps, power menu, loop mode
  */
-const EVERSOLO_CARD_VERSION = "2.0.0";
+const EVERSOLO_CARD_VERSION = "2.1.0";
 
 const ICONS = {
   play: "M8 5v14l11-7z",

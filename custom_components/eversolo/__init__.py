@@ -16,7 +16,7 @@ from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EversoloApi, EversoloError
-from .const import CARD_URL, CONF_HOST, CONF_PORT, DEFAULT_PORT, DOMAIN, LOOP_MODES, VERSION
+from .const import CARD_URL, CONF_HOST, ICONS_URL, CONF_PORT, DEFAULT_PORT, DOMAIN, LOOP_MODES, VERSION
 from .coordinator import EversoloCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,14 +64,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
-    """Serve the Lovelace card and load it on every dashboard (once per HA run)."""
+    """Serve the Lovelace card and the eversolo:* icon set on every page (once per HA run)."""
     flag = f"{DOMAIN}_card_registered"
     if hass.data.get(flag):
         return
     hass.data[flag] = True
-    path = os.path.join(os.path.dirname(__file__), "www", "eversolo-player-card.js")
-    await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, path, False)])
+    www = os.path.join(os.path.dirname(__file__), "www")
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(CARD_URL, os.path.join(www, "eversolo-player-card.js"), False),
+            StaticPathConfig(ICONS_URL, os.path.join(www, "eversolo-icons.js"), False),
+        ]
+    )
     frontend.add_extra_js_url(hass, f"{CARD_URL}?v={VERSION}")
+    frontend.add_extra_js_url(hass, f"{ICONS_URL}?v={VERSION}")
 
 
 def _coordinator_for(hass: HomeAssistant, entity_id: str) -> EversoloCoordinator:

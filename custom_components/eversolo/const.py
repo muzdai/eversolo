@@ -4,7 +4,7 @@ Values below are taken from the decompiled Eversolo Controller app (see docs/pro
 """
 
 DOMAIN = "eversolo"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 CONF_NAME = "name"
 CONF_HOST = "host"
@@ -25,6 +25,7 @@ SCAN_INTERVAL_SECONDS = 2
 SLOW_REFRESH_SECONDS = 300
 
 CARD_URL = f"/{DOMAIN}/eversolo-player-card.js"
+ICONS_URL = f"/{DOMAIN}/eversolo-icons.js"
 
 # MusicState.state (getState). The app treats 1, 2, 3 as "playing or preparing".
 STATE_IDLE = 0
