@@ -47,9 +47,6 @@
       },
       "output": {
         "name": "Output"
-      },
-      "app": {
-        "name": "Streaming app"
       }
     },
     "button": {
