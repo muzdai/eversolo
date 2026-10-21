@@ -5,7 +5,7 @@
  * - DSP / EQ / sub status, spectrum and VU buttons, menu with inputs, outputs, apps, power
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.2.1";
+const EVERSOLO_CARD_VERSION = "2.2.2";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -45,6 +45,13 @@ const LOOP_ICON = { repeat_all: "repeat", repeat_one: "repeat-one", shuffle: "sh
 // Icon per display mode, as the app picks them (DetailsFragment).
 const VU_ICON = { "-1": "vu", 0: "vu", 1: "vu-big", 2: "vu-off" };
 const SPECTRUM_ICON = { 0: "spectrum", 1: "spectrum-big", 2: "spectrum-off" };
+
+/* The integration loads eversolo-icons.js on every page; if it has not arrived yet
+ * (or the card is used without it), load it from the integration's static path. */
+if (!window.EversoloIcons && !window.__eversoloIconsRequested) {
+  window.__eversoloIconsRequested = true;
+  import(`/eversolo/eversolo-icons.js?v=${EVERSOLO_CARD_VERSION}`).catch(() => {});
+}
 
 /* eversolo:* icon if the icon set is loaded, else a built-in fallback path. */
 const iconPath = (name, fallback) => (window.EversoloIcons && window.EversoloIcons[name]) || BASE_ICONS[fallback || name] || "";

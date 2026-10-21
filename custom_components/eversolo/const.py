@@ -4,7 +4,7 @@ Values below are taken from the decompiled Eversolo Controller app (see docs/pro
 """
 
 DOMAIN = "eversolo"
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 
 CONF_NAME = "name"
 CONF_HOST = "host"

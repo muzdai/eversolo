@@ -45,4 +45,18 @@
     getIconList: async () => Object.keys(ICONS).map((name) => ({ name, keywords: ["eversolo", ...name.split("-")] })),
   };
   window.dispatchEvent(new Event("eversolo-icons-loaded"));
+
+  // Home Assistant loads this file asynchronously. An <ha-icon icon="eversolo:..."> drawn
+  // before the set was registered (view tabs, entity rows) gave up on it; redraw those.
+  const refresh = (root) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.localName === "ha-icon" && typeof el.icon === "string" && el.icon.startsWith("eversolo:")) {
+        const icon = el.icon;
+        el.icon = "";
+        requestAnimationFrame(() => { el.icon = icon; });
+      }
+      if (el.shadowRoot) refresh(el.shadowRoot);
+    }
+  };
+  for (const delay of [0, 1000, 3000, 8000]) setTimeout(() => refresh(document), delay);
 })();
