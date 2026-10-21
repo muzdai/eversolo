@@ -6,11 +6,11 @@ import os
 
 import voluptuous as vol
 
-from homeassistant.components import frontend
+from homeassistant.components import frontend, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -18,6 +18,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import EversoloApi, EversoloError
 from .const import CARD_URL, CONF_HOST, ICONS_URL, CONF_PORT, DEFAULT_PORT, DOMAIN, LOOP_MODES, VERSION
 from .coordinator import EversoloCoordinator
+from .mirror import MirrorSession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +34,13 @@ SCHEMA_LOOP = vol.Schema({**_ENTITY_SCHEMA, vol.Required("mode"): vol.In(list(LO
 SCHEMA_REQUEST = vol.Schema({**_ENTITY_SCHEMA, vol.Required("path"): cv.string})
 
 
+MIRROR_KEYS = ["Back", "Home", "Info", "VolumeUp", "VolumeDown", "Mute"]
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    websocket_api.async_register_command(hass, ws_mirror_subscribe)
+    websocket_api.async_register_command(hass, ws_mirror_touch)
+    websocket_api.async_register_command(hass, ws_mirror_key)
     return True
 
 
@@ -42,6 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api = EversoloApi(session, entry.data[CONF_HOST], entry.data.get(CONF_PORT, DEFAULT_PORT))
     coordinator = EversoloCoordinator(hass, api, entry.title)
     await coordinator.async_config_entry_first_refresh()
+    coordinator.mirror = MirrorSession(hass, api)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await _async_register_card(hass)
@@ -59,7 +67,9 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        coordinator = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if coordinator is not None and getattr(coordinator, "mirror", None):
+            await coordinator.mirror.async_shutdown()
     return unloaded
 
 
@@ -199,3 +209,71 @@ def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "request", request, SCHEMA_REQUEST, supports_response=SupportsResponse.ONLY
     )
+
+
+# ---- screen mirroring over the HA websocket ---------------------------------
+@websocket_api.websocket_command(
+    {vol.Required("type"): "eversolo/mirror/subscribe", vol.Required("entity_id"): cv.entity_id}
+)
+@websocket_api.async_response
+async def ws_mirror_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Stream the device screen to the card: config (SPS/PPS) and H.264 frames, base64."""
+    try:
+        coord = _coordinator_for(hass, msg["entity_id"])
+    except HomeAssistantError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+        return
+    msg_id = msg["id"]
+
+    @callback
+    def forward(payload: dict) -> None:
+        connection.send_message(websocket_api.event_message(msg_id, payload))
+
+    try:
+        unsubscribe = await coord.mirror.async_subscribe(forward)
+    except (EversoloError, OSError, TimeoutError) as err:
+        connection.send_error(msg_id, "mirror_failed", str(err))
+        return
+    connection.subscriptions[msg_id] = unsubscribe
+    connection.send_result(msg_id)
+    coord.mirror.replay(forward)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eversolo/mirror/touch",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("action"): vol.In([0, 1, 2]),
+        vol.Required("x"): vol.Coerce(int),
+        vol.Required("y"): vol.Coerce(int),
+    }
+)
+@websocket_api.async_response
+async def ws_mirror_touch(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Touch on the mirrored screen: action 0 down, 2 move, 1 up; x/y in video pixels."""
+    try:
+        coord = _coordinator_for(hass, msg["entity_id"])
+        await coord.mirror.async_touch(msg["action"], msg["x"], msg["y"])
+    except (HomeAssistantError, OSError) as err:
+        connection.send_error(msg["id"], "touch_failed", str(err))
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eversolo/mirror/key",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("key"): vol.In(MIRROR_KEYS),
+    }
+)
+@websocket_api.async_response
+async def ws_mirror_key(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Navigation keys of the app's remote screen (Home, Back, volume)."""
+    try:
+        coord = _coordinator_for(hass, msg["entity_id"])
+        await coord.api.key(msg["key"])
+    except (HomeAssistantError, EversoloError) as err:
+        connection.send_error(msg["id"], "key_failed", str(err))
+        return
+    connection.send_result(msg["id"])

@@ -7,7 +7,8 @@
  *   real levels over its API, so these are animated, not measured)
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.4.0";
+window.customCards = window.customCards || [];
+const EVERSOLO_CARD_VERSION = "2.5.0";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -707,6 +708,258 @@ class EversoloPlayerCard extends HTMLElement {
     window.addEventListener("pointerup", up);
     seek(ev);
   }
+}
+
+/* ---- Screen mirror card -------------------------------------------------
+ * The device screen as in the app's "remote screen": H.264 from the player,
+ * relayed by the integration over the HA websocket, decoded with WebCodecs.
+ * Tap, drag and swipe on the picture act on the player's touchscreen. */
+const MIRROR_STRINGS = {
+  en: { connecting: "Connecting to the player screen…", ended: "Mirroring stopped. Tap to reconnect.",
+        nocodec: "This browser cannot decode the stream (WebCodecs is missing).",
+        insecure: "The screen needs Home Assistant opened over HTTPS (browsers allow video decoding only there).", failed: "Could not start mirroring: {e}",
+        back: "Back", home: "Home", voldown: "Volume down", volup: "Volume up" },
+  ru: { connecting: "Подключение к экрану плеера…", ended: "Трансляция остановлена. Нажмите, чтобы переподключиться.",
+        nocodec: "Браузер не умеет декодировать поток (нет WebCodecs).",
+        insecure: "Для экрана откройте Home Assistant по HTTPS: браузеры разрешают декодирование видео только там.", failed: "Не удалось запустить трансляцию: {e}",
+        back: "Назад", home: "Домой", voldown: "Тише", volup: "Громче" },
+};
+const MIRROR_ICONS = {
+  back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z",
+  home: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
+  voldown: "M18.5 12A4.5 4.5 0 0 0 16 8v8a4.5 4.5 0 0 0 2.5-4zM5 9v6h4l5 5V4L9 9H5z",
+  volup: BASE_ICONS.volume,
+};
+
+const b64ToBytes = (b64) => {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};
+
+/* avc1.PPCCLL from the SPS that follows the first Annex-B start code. */
+const avcCodec = (config) => {
+  for (let i = 0; i + 7 < config.length; i++) {
+    const sc4 = config[i] === 0 && config[i + 1] === 0 && config[i + 2] === 0 && config[i + 3] === 1;
+    const sc3 = config[i] === 0 && config[i + 1] === 0 && config[i + 2] === 1;
+    const n = sc4 ? i + 4 : sc3 ? i + 3 : -1;
+    if (n >= 0 && (config[n] & 0x1f) === 7) {
+      const hex = (v) => v.toString(16).padStart(2, "0");
+      return `avc1.${hex(config[n + 1])}${hex(config[n + 2])}${hex(config[n + 3])}`;
+    }
+  }
+  return "avc1.42E01F";
+};
+
+class EversoloMirrorCard extends HTMLElement {
+  setConfig(config) {
+    if (!config || !config.entity || !config.entity.startsWith("media_player.")) {
+      throw new Error("eversolo-mirror-card: set `entity` to the Eversolo media_player");
+    }
+    this._config = { show_nav: true, ...config };
+    if (!this.shadowRoot) this._build();
+    this._root.getElementById("nav").classList.toggle("hide", !this._config.show_nav);
+  }
+
+  set hass(hass) {
+    const first = !this._hass;
+    this._hass = hass;
+    if (first && this.isConnected) this._start();
+  }
+
+  getCardSize() { return 6; }
+  getGridOptions() { return { columns: 12, min_columns: 6 }; }
+
+  static getStubConfig(hass) {
+    const e = Object.keys(hass.states).find(
+      (s) => s.startsWith("media_player.") && hass.states[s].attributes && "vu_mode" in hass.states[s].attributes,
+    );
+    return { entity: e || "media_player.eversolo" };
+  }
+
+  _t(key) {
+    const lang = (this._hass && (this._hass.locale?.language || this._hass.language)) || "en";
+    const table = MIRROR_STRINGS[lang.split("-")[0]] || MIRROR_STRINGS.en;
+    return table[key] ?? MIRROR_STRINGS.en[key] ?? key;
+  }
+
+  _build() {
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display:block; background:#000; border-radius:var(--ha-card-border-radius, 16px); overflow:hidden; color:#eee;
+                font-family:var(--ha-font-family-body, system-ui, sans-serif); }
+        .screen { position:relative; width:100%; aspect-ratio:var(--ratio, 2 / 1); background:#000; }
+        canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:pointer; display:block; }
+        .msg { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:16px;
+               font-size:14px; opacity:.75; background:rgba(0,0,0,.55); cursor:pointer; }
+        .msg[hidden] { display:none; }
+        .nav { display:flex; justify-content:center; gap:28px; padding:6px 0 8px; background:#0b0b0c; }
+        .nav.hide { display:none; }
+        .nav button { all:unset; cursor:pointer; width:40px; height:40px; display:grid; place-items:center; border-radius:50%; }
+        .nav button:active { background:rgba(255,255,255,.12); }
+        .nav svg { width:24px; height:24px; fill:#ddd; }
+      </style>
+      <div class="screen" id="screen"><canvas id="cv"></canvas><div class="msg" id="msg"></div></div>
+      <div class="nav" id="nav">
+        ${["back", "home", "voldown", "volup"].map((k) =>
+          `<button data-key="${k}"><svg viewBox="0 0 24 24"><path d="${MIRROR_ICONS[k]}"/></svg></button>`).join("")}
+      </div>`;
+    this._root = this.shadowRoot;
+    this._canvas = this._root.getElementById("cv");
+    this._ctx = this._canvas.getContext("2d");
+    this._root.getElementById("msg").addEventListener("click", () => { if (this._ended) this._restart(); });
+    this._root.getElementById("nav").addEventListener("click", (ev) => {
+      const btn = ev.composedPath().find((el) => el && el.dataset && el.dataset.key);
+      if (!btn) return;
+      const key = { back: "Back", home: "Home", voldown: "VolumeDown", volup: "VolumeUp" }[btn.dataset.key];
+      this._send({ type: "eversolo/mirror/key", key });
+    });
+    for (const [ev, fn] of [["pointerdown", "_down"], ["pointermove", "_move"], ["pointerup", "_up"], ["pointercancel", "_up"]]) {
+      this._canvas.addEventListener(ev, (e) => this[fn](e));
+    }
+  }
+
+  connectedCallback() {
+    this._vis = () => (document.hidden ? this._stop() : this._start());
+    document.addEventListener("visibilitychange", this._vis);
+    if (this._hass) this._start();
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener("visibilitychange", this._vis);
+    this._stop();
+  }
+
+  _status(text) {
+    const m = this._root.getElementById("msg");
+    m.textContent = text || "";
+    m.hidden = !text;
+  }
+
+  async _start() {
+    if (this._unsub || this._starting || !this._hass || document.hidden) return;
+    for (const b of this._root.querySelectorAll(".nav button")) b.title = this._t(b.dataset.key);
+    if (typeof VideoDecoder === "undefined") { this._status(this._t(window.isSecureContext ? "nocodec" : "insecure")); return; }
+    this._starting = true;
+    this._ended = false;
+    this._status(this._t("connecting"));
+    try {
+      this._unsub = await this._hass.connection.subscribeMessage((m) => this._onMessage(m), {
+        type: "eversolo/mirror/subscribe", entity_id: this._config.entity,
+      });
+    } catch (err) {
+      this._ended = true;
+      this._status(this._t("failed").replace("{e}", (err && (err.message || err.code)) || err));
+    } finally {
+      this._starting = false;
+    }
+  }
+
+  _stop() {
+    const unsub = this._unsub;
+    this._unsub = null;
+    if (unsub) unsub().catch(() => {});
+    this._closeDecoder();
+  }
+
+  _restart() { this._stop(); this._start(); }
+
+  _closeDecoder() {
+    if (this._decoder && this._decoder.state !== "closed") { try { this._decoder.close(); } catch (e) { /* closed */ } }
+    this._decoder = null;
+    this._gotKey = false;
+  }
+
+  _onMessage(m) {
+    if (m.type === "config") return this._configure(m);
+    if (m.type === "frame") return this._frame(m);
+    if (m.type === "ended") { this._ended = true; this._stop(); this._status(this._t("ended")); }
+  }
+
+  _configure(m) {
+    this._closeDecoder();
+    this._config_bytes = b64ToBytes(m.data);
+    this._w = m.width || 960; this._h = m.height || 480;
+    this._canvas.width = this._w; this._canvas.height = this._h;
+    this.style.setProperty("--ratio", `${this._w} / ${this._h}`);
+    this._ts = 0;
+    this._decoder = new VideoDecoder({
+      output: (frame) => { this._ctx.drawImage(frame, 0, 0, this._w, this._h); frame.close(); this._status(""); },
+      error: (e) => { this._status(this._t("failed").replace("{e}", e.message)); this._closeDecoder(); },
+    });
+    // No description: chunks are Annex-B, so SPS/PPS go in front of every key frame.
+    this._decoder.configure({ codec: avcCodec(this._config_bytes), optimizeForLatency: true });
+  }
+
+  _frame(m) {
+    const dec = this._decoder;
+    if (!dec || dec.state !== "configured") return;
+    if (!m.key && !this._gotKey) return;
+    if (!m.key && dec.decodeQueueSize > 30) return; // falling behind: wait for the next key frame
+    let data = b64ToBytes(m.data);
+    if (m.key) {
+      this._gotKey = true;
+      const joined = new Uint8Array(this._config_bytes.length + data.length);
+      joined.set(this._config_bytes, 0); joined.set(data, this._config_bytes.length);
+      data = joined;
+    }
+    this._ts += 33333;
+    try {
+      dec.decode(new EncodedVideoChunk({ type: m.key ? "key" : "delta", timestamp: this._ts, data }));
+    } catch (e) {
+      this._gotKey = false;
+    }
+  }
+
+  /* ---- touch ----------------------------------------------------------- */
+  _point(e) {
+    const r = this._canvas.getBoundingClientRect();
+    return {
+      x: Math.round(((e.clientX - r.left) / r.width) * (this._w || 960)),
+      y: Math.round(((e.clientY - r.top) / r.height) * (this._h || 480)),
+    };
+  }
+
+  _send(msg) {
+    if (!this._hass) return;
+    this._hass.connection.sendMessagePromise({ entity_id: this._config.entity, ...msg }).catch(() => {});
+  }
+
+  _down(e) {
+    if (!this._unsub) return;
+    this._canvas.setPointerCapture(e.pointerId);
+    this._pressed = true;
+    this._lastMove = 0;
+    const p = this._point(e);
+    this._send({ type: "eversolo/mirror/touch", action: 0, ...p });
+  }
+
+  _move(e) {
+    if (!this._pressed) return;
+    const now = performance.now();
+    if (now - this._lastMove < 16) return; // ~60 updates per second is enough for swipes
+    this._lastMove = now;
+    this._send({ type: "eversolo/mirror/touch", action: 2, ...this._point(e) });
+  }
+
+  _up(e) {
+    if (!this._pressed) return;
+    this._pressed = false;
+    this._send({ type: "eversolo/mirror/touch", action: 1, ...this._point(e) });
+  }
+}
+
+if (!customElements.get("eversolo-mirror-card")) {
+  customElements.define("eversolo-mirror-card", EversoloMirrorCard);
+}
+if (!window.customCards.some((c) => c.type === "eversolo-mirror-card")) {
+  window.customCards.push({
+    type: "eversolo-mirror-card",
+    name: "Eversolo Screen",
+    description: "The Eversolo player's screen, mirrored and controllable by touch",
+    preview: false,
+  });
 }
 
 if (!customElements.get("eversolo-player-card")) {
