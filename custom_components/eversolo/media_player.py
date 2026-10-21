@@ -96,6 +96,13 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         """True when nothing is loaded in the library player but another source reports playback."""
         return not self._music and bool(self._audio)
 
+    @property
+    def _use_audio(self) -> bool:
+        """Same rule as PlaybackFragmentLand: playType 5 is the library, others use everSoloPlayAudioInfo."""
+        if not self._audio.get("songName"):
+            return False
+        return not self._music or self._info.get("playType") not in (None, 5)
+
     @staticmethod
     def _selected(items: list[dict]) -> str | None:
         for item in items:
@@ -143,14 +150,20 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
 
     @property
     def media_title(self) -> str | None:
+        if self._use_audio:
+            return self._audio.get("songName")
         return self._music.get("title") or self._audio.get("songName") or None
 
     @property
     def media_artist(self) -> str | None:
+        if self._use_audio:
+            return self._audio.get("artistName") or None
         return self._music.get("artist") or self._audio.get("artistName") or None
 
     @property
     def media_album_name(self) -> str | None:
+        if self._use_audio:
+            return self._audio.get("albumName") or None
         return self._music.get("album") or self._audio.get("albumName") or None
 
     @property
@@ -230,6 +243,12 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         music, audio, out = self._music, self._audio, self._output
         audio_rate = audio.get("audioSampleRate")
         out_rate = out.get("outPutSampleRate")
+        state = self._state
+
+        def flag(has: str, active: str) -> bool | None:
+            # None when the device has no such block (the app hides the icon).
+            return bool(state.get(active, True)) if state.get(has) else None
+
         return {
             "input": self._selected(io["inputs"]),
             "input_list": [i["name"] for i in io["inputs"]],
@@ -254,6 +273,15 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
                 if x
             )
             or None,
+            "output_codec": out.get("outPutDecodec") or None,
+            "output_rate": f"{out_rate / 1000:g} kHz" if out_rate else None,
+            "output_bits": out.get("outPutBits") or None,
+            "channels": music.get("channels") or audio.get("audioChannels") or None,
+            "bitrate": music.get("bitrate") or None,
+            "source_name": self._info.get("playTypeSubtitle") or None,
+            "dsp": flag("hasDspSetting", "dspActive"),
+            "eq": flag("hasEQSetting", "eqActive"),
+            "sub": flag("hasSubSetting", "subActive"),
             "volume_display": self._volume.get("display"),
             "model": self._entry.data.get(CONF_MODEL),
             "host": self.coordinator.api.host,

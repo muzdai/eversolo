@@ -1,20 +1,23 @@
 /* Eversolo player card for Home Assistant — https://github.com/muzdai/eversolo
+ * Styled after the Eversolo Control app's now-playing screen:
  * - landscape / portrait layout from the screen orientation (landscape when unknown)
  * - background colours sampled from the album cover (ambient style)
- * - inputs, outputs, VU / spectrum, streaming apps, power menu, loop mode
+ * - DSP / EQ / sub status, spectrum and VU buttons, menu with inputs, outputs, apps, power
+ * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
-const EVERSOLO_CARD_VERSION = "2.1.0";
+const EVERSOLO_CARD_VERSION = "2.2.0";
 
-const ICONS = {
+const BASE_ICONS = {
   play: "M8 5v14l11-7z",
   pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
-  next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
-  prev: "M6 6h2v12H6zm3.5 6l8.5 6V6z",
+  next: "M5 18.5V5.5L14 12zM16 5.5h3v13h-3z",
+  prev: "M19 5.5v13L10 12zM5 5.5h3v13H5z",
   volume: "M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
   mute: "M16.5 12A4.5 4.5 0 0 0 14 8v2.18l2.45 2.45c.03-.2.05-.41.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z",
   repeat: "M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z",
-  shuffle: "M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
-  once: "M4 10h12v2H4zm0-4h12v2H4zm0 8h8v2H4zm10 0v6l5-3z",
+  more: "M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+  back: "M15.4 7.4L14 6l-6 6 6 6 1.4-1.4L10.8 12z",
+  pulse: "M3 13h2.8l4.3-8.2 1.2 9 3.2-4.1 3.3 3.3H21v2h-4l-2.3-2.3-4.8 6.1-1-7.4L7 15H3z",
   music: "M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z",
 };
 
@@ -24,19 +27,27 @@ const F = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, VOLUME_MUTE: 8, PREV: 16, NEXT: 32
 const STRINGS = {
   en: {
     nothing: "Nothing playing", notFound: "Entity {e} not found", unavailable: "Player is unavailable",
-    input: "Input", output: "Out", vu: "VU", spectrum: "Spectrum", app: "Apps", power: "Power",
-    inputTitle: "Input", outputTitle: "Output", appTitle: "Open app", powerTitle: "Power", loopTitle: "Loop mode",
-    empty: "Nothing available on this device",
+    input: "Input", output: "Output", vu: "VU meter", spectrum: "Spectrum", app: "Apps", power: "Power", more: "More",
+    dsp: "DSP", eq: "EQ", sub: "Subwoofer", on: "on", off: "off",
+    loopTitle: "Loop mode", openApp: "Open app", empty: "Nothing available on this device",
     repeat_all: "Repeat list", repeat_one: "Repeat track", shuffle: "Shuffle", play_once: "Play list once",
   },
   ru: {
     nothing: "Ничего не играет", notFound: "Сущность {e} не найдена", unavailable: "Плеер недоступен",
-    input: "Вход", output: "Выход", vu: "VU", spectrum: "Спектр", app: "Приложения", power: "Питание",
-    inputTitle: "Вход", outputTitle: "Выход", appTitle: "Открыть приложение", powerTitle: "Питание", loopTitle: "Режим повтора",
-    empty: "На устройстве ничего нет",
+    input: "Вход", output: "Выход", vu: "VU-индикатор", spectrum: "Спектр", app: "Приложения", power: "Питание", more: "Ещё",
+    dsp: "DSP", eq: "EQ", sub: "Сабвуфер", on: "вкл", off: "выкл",
+    loopTitle: "Режим повтора", openApp: "Открыть приложение", empty: "На устройстве ничего нет",
     repeat_all: "Повтор списка", repeat_one: "Повтор трека", shuffle: "Случайный порядок", play_once: "Список один раз",
   },
 };
+
+const LOOP_ICON = { repeat_all: "repeat", repeat_one: "repeat-one", shuffle: "shuffle", play_once: "play-once" };
+// Icon per display mode, as the app picks them (DetailsFragment).
+const VU_ICON = { "-1": "vu", 0: "vu", 1: "vu-big", 2: "vu-off" };
+const SPECTRUM_ICON = { 0: "spectrum", 1: "spectrum-big", 2: "spectrum-off" };
+
+/* eversolo:* icon if the icon set is loaded, else a built-in fallback path. */
+const iconPath = (name, fallback) => (window.EversoloIcons && window.EversoloIcons[name]) || BASE_ICONS[fallback || name] || "";
 
 const svg = (path, cls = "") =>
   `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
@@ -83,7 +94,7 @@ class EversoloPlayerCard extends HTMLElement {
     if (config.layout && !["auto", "landscape", "portrait"].includes(config.layout)) {
       throw new Error("eversolo-player-card: layout must be auto, landscape or portrait");
     }
-    this._config = { show_background: true, show_chips: true, layout: "auto", ...config };
+    this._config = { show_background: true, show_volume: true, show_chips: false, layout: "auto", ...config };
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
       this._build();
@@ -98,7 +109,7 @@ class EversoloPlayerCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._layout === "portrait" ? 9 : 5;
+    return this._layout === "portrait" ? 10 : 6;
   }
 
   getGridOptions() {
@@ -118,6 +129,8 @@ class EversoloPlayerCard extends HTMLElement {
     this._mq = window.matchMedia("(orientation: portrait)");
     this._mqListener = () => this._applyLayout();
     this._mq.addEventListener("change", this._mqListener);
+    this._iconsListener = () => { this._rendered = false; this._render(); };
+    window.addEventListener("eversolo-icons-loaded", this._iconsListener);
     this._tick = setInterval(() => this._updateProgress(), 500);
     this._applyLayout();
   }
@@ -125,6 +138,7 @@ class EversoloPlayerCard extends HTMLElement {
   disconnectedCallback() {
     if (this._ro) this._ro.disconnect();
     if (this._mq) this._mq.removeEventListener("change", this._mqListener);
+    window.removeEventListener("eversolo-icons-loaded", this._iconsListener);
     clearInterval(this._tick);
   }
 
@@ -138,58 +152,95 @@ class EversoloPlayerCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host { display:block; position:relative; border-radius:var(--ha-card-border-radius, 20px); overflow:hidden;
-                --c1:#2a2a2e; --c2:#131316; color:#f2f2f2; font-family:var(--ha-font-family-body, system-ui, sans-serif); }
+                --c1:#3a2a22; --c2:#140f0d; --accent:#d9925a; color:#f4f1ee;
+                font-family:var(--ha-font-family-body, system-ui, sans-serif); }
         .bg { position:absolute; inset:-30%; background:
-                radial-gradient(45% 55% at 20% 25%, var(--c1), transparent 70%),
-                radial-gradient(50% 60% at 85% 85%, var(--c2), transparent 75%),
-                #0b0b0d;
-              filter: blur(38px) saturate(1.25); transition: background 0.8s ease; }
-        .bg.off { background:#0b0b0d; }
-        .shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.55)); }
-        .wrap { position:relative; padding:18px; display:grid; gap:16px; }
-        :host(.portrait) .wrap { grid-template-columns: 1fr; justify-items:center; text-align:center; }
-        :host(.landscape) .wrap { grid-template-columns: minmax(150px, 40%) 1fr; align-items:center; }
-        .cover { position:relative; width:100%; aspect-ratio:1/1; border-radius:14px; overflow:hidden;
-                 background:rgba(255,255,255,.06); box-shadow:0 18px 40px rgba(0,0,0,.45); }
-        :host(.portrait) .cover { width:min(78%, 320px); }
+                radial-gradient(50% 60% at 25% 30%, var(--c1), transparent 72%),
+                radial-gradient(55% 65% at 85% 80%, var(--c2), transparent 75%),
+                #0d0b0a;
+              filter: blur(42px) saturate(1.15); transition: background 0.8s ease; }
+        .bg.off { background:#0d0b0a; }
+        .shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.6)); }
+        .wrap { position:relative; padding:14px 20px 18px; container-type:inline-size; }
+
+        .top { display:flex; align-items:center; gap:12px; min-height:40px; }
+        .src { flex:1; min-width:0; font-size:clamp(15px, 2.6cqw, 26px); font-weight:500; letter-spacing:.01em;
+               opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .tools { display:flex; align-items:center; gap:clamp(4px, 1.4cqw, 18px); }
+        .tool { all:unset; display:grid; place-items:center; width:clamp(30px, 4.6cqw, 46px); height:clamp(30px, 4.6cqw, 46px);
+                border-radius:10px; cursor:pointer; opacity:.78; }
+        .tool:hover { background:rgba(255,255,255,.08); opacity:1; }
+        .tool.static { cursor:default; }
+        .tool.static:hover { background:none; }
+        .tool.on { opacity:1; color:var(--accent); }
+        .tool svg { width:100%; height:100%; fill:currentColor; padding:3px; box-sizing:border-box; }
+
+        .main { display:grid; gap:clamp(14px, 3cqw, 34px); margin-top:10px; }
+        :host(.landscape) .main { grid-template-columns: minmax(150px, 44%) 1fr; align-items:center; }
+        :host(.portrait) .main { grid-template-columns: 1fr; justify-items:center; text-align:center; }
+        .cover { position:relative; width:100%; aspect-ratio:1/1; border-radius:10px; overflow:hidden;
+                 background:rgba(255,255,255,.06); box-shadow:0 18px 44px rgba(0,0,0,.5); }
+        :host(.portrait) .cover { width:min(80%, 340px); }
         .cover img { position:absolute; inset:0; z-index:1; width:100%; height:100%; object-fit:cover; display:block; }
         .cover img[hidden] { display:none; }
         .cover .ph { position:absolute; inset:0; display:grid; place-items:center; }
-        .cover .ph svg { width:40%; opacity:.35; fill:#fff; }
-        .info { min-width:0; display:grid; gap:6px; width:100%; }
-        .source { font-size:12px; letter-spacing:.08em; text-transform:uppercase; opacity:.65; }
-        .title { font-size:22px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .artist { font-size:15px; opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .fmt { font-size:12px; opacity:.55; min-height:1em; }
-        .seek { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; font-size:12px; margin-top:8px; font-variant-numeric:tabular-nums; }
-        .seek.hide { visibility:hidden; }
-        .bar { position:relative; height:6px; border-radius:3px; background:rgba(255,255,255,.22); cursor:pointer; touch-action:none; }
-        .bar .fill { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:#fff; width:0%; }
-        .transport { display:flex; align-items:center; justify-content:center; gap:18px; margin-top:6px; }
-        button { all:unset; cursor:pointer; display:grid; place-items:center; width:44px; height:44px; border-radius:50%; position:relative; }
-        button:active { transform:scale(.95); }
-        button[disabled] { opacity:.3; pointer-events:none; }
-        button svg { width:26px; height:26px; fill:#fff; }
-        button.big { width:66px; height:66px; background:#fff; }
-        button.big svg { width:34px; height:34px; fill:#111; }
-        button.on svg { fill: var(--accent, #ffd58a); }
-        button .badge { position:absolute; right:6px; bottom:4px; font-size:9px; font-weight:700; }
-        .vol { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; margin-top:6px; }
-        .vol.hide { display:none; }
-        .vol svg { width:22px; height:22px; fill:#fff; opacity:.85; }
+        .cover .ph svg { width:38%; opacity:.3; fill:#fff; }
+
+        .info { min-width:0; width:100%; display:grid; gap:clamp(4px, .9cqw, 10px); }
+        .title { font-size:clamp(20px, 4.2cqw, 44px); font-weight:500; line-height:1.15;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .artist, .album { font-size:clamp(14px, 2.6cqw, 28px); opacity:.62; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .fmt { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:clamp(12px, 2cqw, 22px); opacity:.55;
+               margin-top:clamp(2px, 1cqw, 12px); }
+        :host(.portrait) .fmt, :host(.portrait) .out { justify-content:center; }
+        .codec { border:1.5px solid currentColor; border-radius:4px; padding:1px 6px; }
+        .out { display:flex; align-items:center; gap:12px; font-size:clamp(18px, 3.6cqw, 38px); margin-top:clamp(4px, 1.4cqw, 18px); }
+        .out .dot { width:1.5em; height:1.5em; border-radius:50%; background:#fff; display:grid; place-items:center; flex:none; }
+        .out .dot svg { width:78%; height:78%; fill:#111; }
+        .hide { display:none !important; }
+
+        .transport { display:flex; align-items:center; justify-content:space-between; margin-top:clamp(8px, 2.2cqw, 26px);
+                     max-width:640px; }
+        :host(.portrait) .transport { justify-content:center; gap:clamp(10px, 4cqw, 28px); max-width:none; }
+        button.ctl { all:unset; cursor:pointer; display:grid; place-items:center; width:clamp(38px, 6cqw, 62px); height:clamp(38px, 6cqw, 62px);
+                     border-radius:50%; position:relative; }
+        button.ctl:active { transform:scale(.95); }
+        button.ctl[disabled] { opacity:.3; pointer-events:none; }
+        button.ctl svg { width:62%; height:62%; fill:#fff; }
+        button.ctl.dim svg { opacity:.75; }
+        button.ctl.play { width:clamp(56px, 9cqw, 92px); height:clamp(56px, 9cqw, 92px);
+                          box-shadow: inset 0 0 0 2px var(--accent); background:rgba(0,0,0,.18); }
+        button.ctl.play svg { width:46%; height:46%; }
+        button.ctl.on svg { fill:var(--accent); }
+
+        .vol { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; margin-top:4px; max-width:640px; }
+        .vol svg { width:22px; height:22px; fill:#fff; opacity:.8; }
         .vol .lvl { font-size:12px; opacity:.7; min-width:3ch; text-align:right; font-variant-numeric:tabular-nums; }
-        input[type=range] { width:100%; accent-color:#fff; }
-        .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+        input[type=range] { width:100%; accent-color:var(--accent); }
+
+        .seek { display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center; margin-top:clamp(8px, 2cqw, 22px);
+                font-size:clamp(13px, 2.2cqw, 24px); font-variant-numeric:tabular-nums; opacity:.9; max-width:640px; }
+        :host(.portrait) .vol, :host(.portrait) .seek { width:100%; max-width:none; }
+        .bar { position:relative; height:clamp(6px, 1.2cqw, 12px); border-radius:2px; background:rgba(255,255,255,.12); cursor:pointer; touch-action:none; }
+        .bar .fill { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--accent); width:0%; }
+
+        .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
         :host(.portrait) .chips { justify-content:center; }
         .chip { all:unset; cursor:pointer; padding:7px 12px; border-radius:999px; background:rgba(255,255,255,.14);
                 font-size:12px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
         .chip b { font-weight:600; opacity:.7; margin-right:4px; }
-        .menu { position:absolute; z-index:5; right:12px; bottom:12px; min-width:220px; max-height:60%; overflow:auto;
-                background:rgba(20,20,24,.96); border-radius:14px; padding:6px; box-shadow:0 12px 30px rgba(0,0,0,.5); }
+
+        .menu { position:absolute; z-index:5; right:14px; top:58px; min-width:230px; max-height:70%; overflow:auto;
+                background:rgba(22,19,18,.97); border-radius:14px; padding:6px; box-shadow:0 12px 30px rgba(0,0,0,.55); }
         .menu[hidden] { display:none; }
-        .menu button { display:block; width:100%; height:auto; border-radius:10px; text-align:left; padding:10px 12px; font-size:14px; box-sizing:border-box; }
-        .menu button.sel { background:rgba(255,255,255,.14); }
-        .menu button:hover { background:rgba(255,255,255,.08); }
+        .menu .mh { display:flex; align-items:center; gap:6px; padding:6px 10px; font-size:12px; opacity:.6; }
+        .menu .mh button { all:unset; cursor:pointer; display:grid; place-items:center; width:24px; height:24px; }
+        .menu .mh svg { width:20px; height:20px; fill:#fff; }
+        .menu .it { all:unset; display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; box-sizing:border-box;
+                    border-radius:10px; padding:10px 12px; font-size:14px; cursor:pointer; }
+        .menu .it:hover { background:rgba(255,255,255,.08); }
+        .menu .it.sel { background:rgba(255,255,255,.14); }
+        .menu .it small { opacity:.55; }
         .unavail { padding:24px; text-align:center; opacity:.7; }
       </style>
       <div class="bg" id="bg"></div><div class="shade"></div>
@@ -206,7 +257,7 @@ class EversoloPlayerCard extends HTMLElement {
     const forced = this._config && this._config.layout;
     if (forced === "landscape" || forced === "portrait") return forced;
     const width = this.clientWidth;
-    if (width && width < 420) return "portrait";
+    if (width && width < 460) return "portrait";
     const mq = this._mq || (window.matchMedia && window.matchMedia("(orientation: portrait)"));
     return mq && mq.matches ? "portrait" : "landscape";
   }
@@ -239,62 +290,79 @@ class EversoloPlayerCard extends HTMLElement {
     }
     if (!this._rendered) {
       wrap.innerHTML = `
-        <div class="cover"><div class="ph">${svg(ICONS.music)}</div><img id="cover" alt="" hidden></div>
-        <div class="info">
-          <div class="source" id="source"></div>
-          <div class="title" id="title"></div>
-          <div class="artist" id="artist"></div>
-          <div class="fmt" id="fmt"></div>
-          <div class="seek" id="seek">
-            <span id="pos">--:--</span>
-            <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
-            <span id="dur">--:--</span>
+        <div class="top"><div class="src" id="src"></div><div class="tools" id="tools"></div></div>
+        <div class="main">
+          <div class="cover"><div class="ph">${svg(BASE_ICONS.music)}</div><img id="cover" alt="" hidden></div>
+          <div class="info">
+            <div class="title" id="title"></div>
+            <div class="artist" id="artist"></div>
+            <div class="album" id="album"></div>
+            <div class="fmt" id="fmtrow"><span class="codec" id="codec"></span><span id="fmt"></span></div>
+            <div class="out" id="outrow"><span class="dot">${svg(BASE_ICONS.pulse)}</span><span id="out"></span></div>
+            <div class="transport">
+              <button class="ctl" data-act="prev" id="prev">${svg(BASE_ICONS.prev)}</button>
+              <button class="ctl play" data-act="play" id="play">${svg(BASE_ICONS.play)}</button>
+              <button class="ctl" data-act="next" id="next">${svg(BASE_ICONS.next)}</button>
+              <button class="ctl dim" data-act="loop" id="loop"></button>
+              <button class="ctl dim" data-act="mute" id="mute"></button>
+            </div>
+            <div class="vol" id="volrow">${svg(BASE_ICONS.volume)}<input type="range" id="vol" min="0" max="100" step="1"><span class="lvl" id="lvl"></span></div>
+            <div class="seek" id="seek"><span id="pos">--:--</span><div class="bar" id="bar"><div class="fill" id="fill"></div></div><span id="dur">--:--</span></div>
           </div>
-          <div class="transport">
-            <button data-act="loop" id="loop">${svg(ICONS.repeat)}</button>
-            <button data-act="prev" id="prev">${svg(ICONS.prev)}</button>
-            <button data-act="play" class="big" id="play">${svg(ICONS.play)}</button>
-            <button data-act="next" id="next">${svg(ICONS.next)}</button>
-            <button data-act="mute" id="mute">${svg(ICONS.volume)}</button>
-          </div>
-          <div class="vol" id="volrow">${svg(ICONS.volume)}<input type="range" id="vol" min="0" max="100" step="1"><span class="lvl" id="lvl"></span></div>
-          <div class="chips" id="chips"></div>
-        </div>`;
+        </div>
+        <div class="chips" id="chips"></div>`;
       this._rendered = true;
       this._coverSrc = null;
+      this._toolsHtml = null;
     }
     const a = st.attributes;
     const feat = Number(a.supported_features) || 0;
     const has = (bit) => (feat & bit) === bit;
     const byId = (id) => this._root.getElementById(id);
-    const set = (id, text) => { const el = byId(id); if (el) el.textContent = text; };
+    const set = (id, text) => { const el = byId(id); if (el && el.textContent !== String(text)) el.textContent = text; };
 
-    set("source", a.source || a.input || "Eversolo");
+    set("src", a.source_name || a.source || a.input || "Eversolo");
+    this._renderTools(a);
     set("title", a.media_title || (st.state === "idle" ? this._t("nothing") : "—"));
-    set("artist", [a.media_artist, a.media_album_name].filter(Boolean).join(" · "));
-    const fmtParts = [a.codec, a.bits ? `${a.bits}bit` : null, a.sample_rate || null].filter(Boolean);
-    set("fmt", [fmtParts.join(" · "), a.output_format ? `→ ${a.output_format}` : null].filter(Boolean).join("  "));
+    set("artist", a.media_artist || "");
+    set("album", a.media_album_name || "");
+    byId("artist").classList.toggle("hide", !a.media_artist);
+    byId("album").classList.toggle("hide", !a.media_album_name);
+
+    // FLAC | 96 kHz | 2 ch | 2.63 Mbps | 24 bit, like the app's format line.
+    const bits = a.bits ? `${String(a.bits).replace(/\s*bit$/i, "")} bit` : null;
+    const parts = [a.sample_rate, a.channels ? `${a.channels} ch` : null, a.bitrate, bits].filter(Boolean);
+    set("codec", a.codec || "");
+    byId("codec").classList.toggle("hide", !a.codec);
+    set("fmt", parts.join("  |  "));
+    byId("fmtrow").classList.toggle("hide", !a.codec && !parts.length);
+    const out = [a.output_codec, a.output_rate].filter(Boolean).join("  ");
+    set("out", out);
+    byId("outrow").classList.toggle("hide", !out);
 
     const playing = st.state === "playing";
-    byId("play").innerHTML = svg(playing ? ICONS.pause : ICONS.play);
-    byId("play").toggleAttribute("disabled", !(has(F.PLAY) || has(F.PAUSE)));
+    const playBtn = byId("play");
+    const playIcon = playing ? BASE_ICONS.pause : BASE_ICONS.play;
+    if (playBtn.dataset.icon !== playIcon) { playBtn.innerHTML = svg(playIcon); playBtn.dataset.icon = playIcon; }
+    playBtn.toggleAttribute("disabled", !(has(F.PLAY) || has(F.PAUSE)));
     byId("prev").toggleAttribute("disabled", !has(F.PREV));
     byId("next").toggleAttribute("disabled", !has(F.NEXT));
     byId("seek").classList.toggle("hide", !has(F.SEEK) && !a.media_duration);
 
     const loop = a.loop_mode || "repeat_all";
     const loopBtn = byId("loop");
-    const loopIcon = { shuffle: ICONS.shuffle, play_once: ICONS.once }[loop] || ICONS.repeat;
-    loopBtn.innerHTML = svg(loopIcon) + (loop === "repeat_one" ? '<span class="badge">1</span>' : "");
-    loopBtn.classList.toggle("on", loop !== "play_once");
+    const loopHtml = svg(iconPath(LOOP_ICON[loop], "repeat"));
+    if (loopBtn.innerHTML !== loopHtml) loopBtn.innerHTML = loopHtml;
     loopBtn.title = this._t(loop);
     loopBtn.toggleAttribute("disabled", !has(F.REPEAT));
 
     const muteBtn = byId("mute");
-    muteBtn.innerHTML = svg(a.is_volume_muted ? ICONS.mute : ICONS.volume);
+    const muteHtml = svg(a.is_volume_muted ? BASE_ICONS.mute : BASE_ICONS.volume);
+    if (muteBtn.innerHTML !== muteHtml) muteBtn.innerHTML = muteHtml;
     muteBtn.classList.toggle("on", !!a.is_volume_muted);
     muteBtn.toggleAttribute("disabled", !has(F.VOLUME_MUTE));
-    byId("volrow").classList.toggle("hide", !has(F.VOLUME_SET));
+
+    byId("volrow").classList.toggle("hide", !this._config.show_volume || !has(F.VOLUME_SET));
     const vol = byId("vol");
     if (vol && this._root.activeElement !== vol && a.volume_level != null) vol.value = Math.round(a.volume_level * 100);
     set("lvl", a.volume_display ?? (a.volume_level != null ? Math.round(a.volume_level * 100) : ""));
@@ -305,20 +373,44 @@ class EversoloPlayerCard extends HTMLElement {
     this._updateBackground(!!this._config.show_background);
   }
 
+  /* Top-right row, in the app's order: DSP, EQ, sub (status), spectrum, VU (buttons), more. */
+  _renderTools(a) {
+    const tools = [];
+    const status = (key, value) => {
+      if (value === null || value === undefined) return;
+      const name = `${key}-${value ? "on" : "off"}`;
+      tools.push(`<span class="tool static${value ? " on" : ""}" title="${esc(`${this._t(key)}: ${this._t(value ? "on" : "off")}`)}">${svg(iconPath(name, "pulse"))}</span>`);
+    };
+    status("dsp", a.dsp);
+    status("eq", a.eq);
+    status("sub", a.sub);
+    // The app shows the spectrum button for spDisplayMode >= 0 and the VU button for vuDisplayMode >= -1.
+    if (a.spectrum_mode != null && a.spectrum_mode >= 0) {
+      tools.push(`<button class="tool" data-act="spectrum" title="${esc(this._t("spectrum"))}">${svg(iconPath(SPECTRUM_ICON[a.spectrum_mode] || "spectrum", "pulse"))}</button>`);
+    }
+    if (a.vu_mode != null && a.vu_mode >= -1) {
+      tools.push(`<button class="tool" data-act="vu" title="${esc(this._t("vu"))}">${svg(iconPath(VU_ICON[a.vu_mode] || "vu", "pulse"))}</button>`);
+    }
+    tools.push(`<button class="tool" data-act="more" title="${esc(this._t("more"))}">${svg(BASE_ICONS.more)}</button>`);
+    const html = tools.join("");
+    if (html !== this._toolsHtml) {
+      this._root.getElementById("tools").innerHTML = html;
+      this._toolsHtml = html;
+    }
+  }
+
   _renderChips(a) {
     const chips = this._root.getElementById("chips");
     if (!chips) return;
-    if (this._config.show_chips === false) { chips.innerHTML = ""; return; }
+    if (!this._config.show_chips) { chips.innerHTML = ""; chips.classList.add("hide"); return; }
+    chips.classList.remove("hide");
     const list = [];
     if ((a.input_list || []).length) list.push(["input", this._t("input"), a.input]);
     if ((a.output_list || []).length) list.push(["output", this._t("output"), a.output]);
-    // The app shows its VU button for vuDisplayMode >= -1 and its spectrum button for spDisplayMode >= 0.
-    if (a.vu_mode != null && a.vu_mode >= -1) list.push(["vu", this._t("vu"), "↻"]);
-    if (a.spectrum_mode != null && a.spectrum_mode >= 0) list.push(["spectrum", this._t("spectrum"), "↻"]);
     if ((a.app_list || []).length) list.push(["app", this._t("app"), a.app]);
-    if ((a.power_list || []).length) list.push(["power", this._t("power"), "⏻"]);
+    if ((a.power_list || []).length) list.push(["power", this._t("power"), null]);
     const html = list
-      .map(([k, label, val]) => `<button class="chip" data-chip="${k}">${val == null || val === ""
+      .map(([k, label, val]) => `<button class="chip" data-list="${k}">${val == null || val === ""
         ? esc(label) : `<b>${esc(label)}</b>${esc(val)}`}</button>`)
       .join("");
     if (chips.innerHTML !== html) chips.innerHTML = html;
@@ -358,12 +450,15 @@ class EversoloPlayerCard extends HTMLElement {
   _setColors(colors) {
     const bg = this._root.getElementById("bg");
     if (!bg) return;
-    if (!colors) { bg.classList.add("off"); return; }
+    if (!colors) { bg.classList.add("off"); this.style.removeProperty("--accent"); return; }
     bg.classList.remove("off");
     const rgb = (c, a = 1) => `rgba(${c.map((v) => Math.round(v)).join(",")},${a})`;
-    this.style.setProperty("--c1", rgb(colors.primary, 0.9));
-    this.style.setProperty("--c2", rgb(colors.secondary, 0.85));
-    this.style.setProperty("--accent", rgb(colors.primary.map((v) => Math.min(255, v + 90))));
+    const dim = (c, k) => c.map((v) => v * k);
+    this.style.setProperty("--c1", rgb(dim(colors.primary, 0.75), 0.95));
+    this.style.setProperty("--c2", rgb(dim(colors.secondary, 0.55), 0.9));
+    // Accent: the cover's dominant hue, lifted so it reads on the dark background.
+    const p = colors.primary, max = Math.max(...p) || 1, lift = Math.max(1, 215 / max);
+    this.style.setProperty("--accent", rgb(p.map((v) => Math.min(255, v * lift))));
   }
 
   _updateBackground(enabled) {
@@ -379,7 +474,7 @@ class EversoloPlayerCard extends HTMLElement {
   _onClick(ev) {
     const menu = this._root.getElementById("menu");
     const path = ev.composedPath();
-    const btn = path.find((el) => el && el.dataset && (el.dataset.act || el.dataset.chip || el.dataset.opt));
+    const btn = path.find((el) => el && el.dataset && (el.dataset.act || el.dataset.list || el.dataset.opt));
     if (!btn) { if (!menu.hidden && !path.includes(menu)) menu.hidden = true; return; }
     const entity = this._config.entity;
     if (btn.dataset.opt) {
@@ -391,7 +486,7 @@ class EversoloPlayerCard extends HTMLElement {
       if (kind === "loop") return this._call("eversolo", "set_loop_mode", { entity_id: entity, mode: value });
       return;
     }
-    if (btn.dataset.chip) return this._openChip(btn.dataset.chip, btn);
+    if (btn.dataset.list) return this._openList(btn.dataset.list);
     switch (btn.dataset.act) {
       case "play": return this._call("media_player", "media_play_pause", { entity_id: entity });
       case "prev": return this._call("media_player", "media_previous_track", { entity_id: entity });
@@ -400,37 +495,54 @@ class EversoloPlayerCard extends HTMLElement {
         const muted = !!this._state().attributes.is_volume_muted;
         return this._call("media_player", "volume_mute", { entity_id: entity, is_volume_muted: !muted });
       }
+      case "vu": return this._call("eversolo", "vu_next", { entity_id: entity });
+      case "spectrum": return this._call("eversolo", "spectrum_next", { entity_id: entity });
       case "loop": return this._openLoop();
+      case "more": return menu.hidden ? this._openMore() : (menu.hidden = true);
+      case "back": return this._openMore();
     }
+  }
+
+  _openMore() {
+    const a = this._state().attributes;
+    const rows = [
+      ["input", this._t("input"), a.input, (a.input_list || []).length],
+      ["output", this._t("output"), a.output, (a.output_list || []).length],
+      ["app", this._t("app"), a.app, (a.app_list || []).length],
+      ["power", this._t("power"), null, (a.power_list || []).length],
+    ].filter((r) => r[3]);
+    const menu = this._root.getElementById("menu");
+    menu.innerHTML = `<div class="mh">${esc(this._t("more"))}</div>` + (rows.length
+      ? rows.map(([k, label, cur]) => `<button class="it" data-list="${k}"><span>${esc(label)}</span><small>${esc(cur ?? "")}</small></button>`).join("")
+      : `<div class="mh">${esc(this._t("empty"))}</div>`);
+    menu.hidden = false;
   }
 
   _openLoop() {
     const cur = this._state().attributes.loop_mode || "repeat_all";
     this._showMenu(this._t("loopTitle"),
-      ["repeat_all", "repeat_one", "shuffle", "play_once"].map((m) => [m, this._t(m), m === cur]), "loop");
+      ["repeat_all", "repeat_one", "shuffle", "play_once"].map((m) => [m, this._t(m), m === cur]), "loop", false);
   }
 
-  _openChip(kind) {
+  _openList(kind) {
     const a = this._state().attributes;
-    const entity = this._config.entity;
-    if (kind === "vu") return this._call("eversolo", "vu_next", { entity_id: entity });
-    if (kind === "spectrum") return this._call("eversolo", "spectrum_next", { entity_id: entity });
     const lists = {
-      input: [a.input_list || [], a.input, "inputTitle"],
-      output: [a.output_list || [], a.output, "outputTitle"],
-      app: [a.app_list || [], a.app, "appTitle"],
-      power: [a.power_list || [], null, "powerTitle"],
+      input: [a.input_list || [], a.input, "input"],
+      output: [a.output_list || [], a.output, "output"],
+      app: [a.app_list || [], a.app, "openApp"],
+      power: [a.power_list || [], null, "power"],
     };
     const [items, current, title] = lists[kind] || [[], null, kind];
-    this._showMenu(this._t(title), items.map((i) => [i, i, i === current]), kind);
+    this._showMenu(this._t(title), items.map((i) => [i, i, i === current]), kind, true);
   }
 
-  _showMenu(title, items, kind) {
+  _showMenu(title, items, kind, withBack) {
     const menu = this._root.getElementById("menu");
-    menu.innerHTML = `<div class="fmt" style="padding:6px 12px">${esc(title)}</div>` +
+    const back = withBack ? `<button data-act="back">${svg(BASE_ICONS.back)}</button>` : "";
+    menu.innerHTML = `<div class="mh">${back}${esc(title)}</div>` +
       (items.length ? items.map(([val, label, sel]) =>
-        `<button data-opt="${esc(kind)}|${esc(val)}" class="${sel ? "sel" : ""}">${esc(label)}</button>`).join("")
-        : `<div class="fmt" style="padding:8px 12px">${esc(this._t("empty"))}</div>`);
+        `<button class="it${sel ? " sel" : ""}" data-opt="${esc(kind)}|${esc(val)}"><span>${esc(label)}</span></button>`).join("")
+        : `<div class="mh">${esc(this._t("empty"))}</div>`);
     menu.hidden = false;
   }
 
@@ -480,7 +592,7 @@ if (!window.customCards.some((c) => c.type === "eversolo-player-card")) {
   window.customCards.push({
     type: "eversolo-player-card",
     name: "Eversolo Player",
-    description: "Eversolo DMP/DAC player with ambient cover background",
+    description: "Eversolo DMP/DAC player, styled after the Eversolo app, with ambient cover background",
     preview: false,
   });
 }
