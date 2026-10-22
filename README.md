@@ -96,4 +96,4 @@ docs/ui_reference/               layouts and icons of the original app
 
 ## License
 
-Not specified. This is an unofficial project, not affiliated with Eversolo.
+[GNU General Public License v3.0](LICENSE). This is an unofficial project, not affiliated with Eversolo.
