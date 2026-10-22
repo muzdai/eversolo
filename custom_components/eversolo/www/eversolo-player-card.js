@@ -8,7 +8,7 @@
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
 window.customCards = window.customCards || [];
-const EVERSOLO_CARD_VERSION = "2.6.0";
+const EVERSOLO_CARD_VERSION = "2.6.1";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -911,8 +911,8 @@ class EversoloMirrorCard extends HTMLElement {
       if (this._offline) { this._offline = false; this._status(this._t("connecting")); }
     } catch (err) {
       // The usual cause is a switched-off player (connection refused / timeout to its address).
-      // Only a missing integration command is worth spelling out; everything else reads as "offline".
-      if (err && err.code === "unknown_command") {
+      // Only a setup problem (old integration, wrong entity) is spelled out; everything else reads as "offline".
+      if (err && (err.code === "unknown_command" || err.code === "not_found")) {
         this._ended = true;
         this._status(this._t("failed").replace("{e}", err.message || err.code));
       } else {

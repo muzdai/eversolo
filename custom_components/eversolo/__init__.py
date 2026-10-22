@@ -130,11 +130,19 @@ async def _async_register_card_resource(hass: HomeAssistant) -> bool:
     return True
 
 
+class EversoloOffline(HomeAssistantError):
+    """The entity is ours, but its config entry is not loaded (player off or unreachable)."""
+
+
 def _coordinator_for(hass: HomeAssistant, entity_id: str) -> EversoloCoordinator:
     entry = er.async_get(hass).async_get(entity_id)
-    if entry is None or entry.config_entry_id not in hass.data.get(DOMAIN, {}):
+    if entry is None or getattr(entry, "platform", DOMAIN) != DOMAIN:
         raise HomeAssistantError(f"{entity_id} is not an Eversolo entity")
-    return hass.data[DOMAIN][entry.config_entry_id]
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.config_entry_id)
+    if coordinator is None:
+        # Setup is retried while the player is off, so the entry exists but is not loaded yet.
+        raise EversoloOffline(f"{entity_id}: device offline")
+    return coordinator
 
 
 def _resolve(items: list[dict], wanted: str, *keys: str) -> dict:
@@ -220,6 +228,9 @@ async def ws_mirror_subscribe(hass: HomeAssistant, connection: websocket_api.Act
     """Stream the device screen to the card: config (SPS/PPS) and H.264 frames, base64."""
     try:
         coord = _coordinator_for(hass, msg["entity_id"])
+    except EversoloOffline as err:
+        connection.send_error(msg["id"], "device_offline", str(err))
+        return
     except HomeAssistantError as err:
         connection.send_error(msg["id"], "not_found", str(err))
         return
@@ -232,7 +243,8 @@ async def ws_mirror_subscribe(hass: HomeAssistant, connection: websocket_api.Act
     try:
         unsubscribe = await coord.mirror.async_subscribe(forward)
     except (EversoloError, OSError, TimeoutError) as err:
-        connection.send_error(msg_id, "mirror_failed", str(err))
+        _LOGGER.debug("Screen mirroring could not start: %s", err)
+        connection.send_error(msg_id, "device_offline", str(err))
         return
     connection.subscriptions[msg_id] = unsubscribe
     connection.send_result(msg_id)
