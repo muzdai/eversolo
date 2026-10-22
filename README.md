@@ -1,116 +1,99 @@
-# Eversolo для Home Assistant
+# Eversolo for Home Assistant
 
-Интеграция для плееров **Eversolo DMP / DAC** (локальная сеть, порт 9529). Ставится через HACS как
-custom repository и добавляет устройство с сущностями и карточку плеера. Все вызовы повторяют то, что
-делает официальное приложение Eversolo Controller 1.15.65 (см. `docs/protocol.md`).
+An integration for **Eversolo DMP / DAC** players (local network, port 9529). It installs through HACS as a
+custom repository and adds a device with entities, a player card and a screen mirror card. Every call mirrors
+what the official Eversolo Controller 1.15.65 app does (see `docs/protocol.md`).
 
-## Что есть
+## Features
 
-| Функция | Где |
+| Feature | Where |
 |---|---|
-| Плеер: play/pause, назад/вперёд, громкость (ползунок и шаги), mute, перемотка, повтор/shuffle, выбор входа | `media_player.<название>` |
-| Карточка плеера: альбомный / портретный вид по ориентации экрана, фон по цветам обложки, RU/EN | Lovelace `custom:eversolo-player-card` |
-| Переключение входов и выходов | карточка, `select` «Вход» и «Выход», сервисы `eversolo.set_input`, `eversolo.set_output` |
-| Стрелочные индикаторы (VU) и спектр на дисплее: следующий режим | карточка, кнопки «VU-индикатор» и «Спектр», сервисы `eversolo.vu_next`, `eversolo.spectrum_next` |
-| Стриминговые приложения на плеере (TIDAL, Qobuz и т.д., что установлено) | карточка, сервис `eversolo.open_app` |
-| Меню питания устройства (ожидание, выключение экрана, перезагрузка — что отдаёт сам плеер) | карточка, кнопка на каждый пункт, сервис `eversolo.power` |
-| Иконки `eversolo:*` (30 шт.: логотип, плеер, VU, спектр, DSP/EQ/Sub, режимы повтора, разъёмы, питание) для любых карточек и сущностей | подключаются автоматически, список в `docs/icons.png` |
-| Зондирование API | сервис `eversolo.request` (GET по произвольному пути, ответ возвращается) |
+| Player: play/pause, previous/next, volume (slider and steps), mute, seek, repeat/shuffle, input selection | `media_player.<name>` |
+| Player card: landscape / portrait layout by screen orientation, background from the cover colors, RU/EN | Lovelace `custom:eversolo-player-card` |
+| Screen mirroring with touch control, like "Screen mirroring" in the app | Lovelace `custom:eversolo-mirror-card` |
+| Input and output switching | card, `select` "Input" and "Output", services `eversolo.set_input`, `eversolo.set_output` |
+| VU meters and spectrum on the device display: next mode | card, "VU meter" and "Spectrum" buttons, services `eversolo.vu_next`, `eversolo.spectrum_next` |
+| Streaming apps on the player (TIDAL, Qobuz, etc., whatever is installed) | card, service `eversolo.open_app` |
+| Device power menu (standby, screen off, reboot: whatever the player reports) | card, one button per item, service `eversolo.power` |
+| `eversolo:*` icons (30: logo, player, VU, spectrum, DSP/EQ/Sub, repeat modes, connectors, power) for any card or entity | loaded automatically, see `docs/icons.png` |
+| API probing | service `eversolo.request` (GET on any path, returns the response) |
 
-Название задаётся при добавлении (при обнаружении подставляется имя плеера) и становится префиксом id
-всех сущностей.
+The name is set when the device is added (discovery fills in the player's name) and becomes the prefix of
+all entity ids.
 
-## Установка через HACS
+## Installation via HACS
 
-1. HACS → меню «⋮» → **Пользовательские репозитории** → `https://github.com/muzdai/eversolo`, категория **Интеграция**.
-2. Установить **Eversolo**, перезапустить Home Assistant.
-3. Плеер появится в «Обнаруженных» (mDNS `_eversolo._tcp`) с моделью и именем. Либо: Настройки → Устройства и службы →
-   **Добавить интеграцию** → Eversolo, ввести название и IP-адрес.
-4. Сразу после отправки формы на экране плеера появится запрос подключения: разрешите его. Если не успели,
-   мастер предложит повторить.
+1. HACS → "⋮" menu → **Custom repositories** → `https://github.com/muzdai/eversolo`, category **Integration**.
+2. Install **Eversolo** and restart Home Assistant.
+3. The player shows up under "Discovered" (mDNS `_eversolo._tcp`) with its model and name. Or: Settings → Devices &
+   services → **Add integration** → Eversolo, then enter a name and the IP address.
+4. Right after you submit the form, the player shows a connection request on its screen: allow it. If you
+   miss it, the wizard offers to try again.
 
-В Настройки → Устройства и службы → Eversolo → **Настроить** можно поменять название, IP-адрес и порт.
-Id уже созданных сущностей при смене названия не меняются.
+Settings → Devices & services → Eversolo → **Configure** lets you change the name, IP address and port.
+Changing the name does not rename entities that already exist.
 
-## Карточка
+## Player card
 
 ```yaml
 type: custom:eversolo-player-card
 entity: media_player.eversolo
 layout: auto            # auto | landscape | portrait
-show_background: true   # фон по обложке
-show_spectrum: true     # «прыгающие» индикаторы уровня за кнопками во время воспроизведения (анимация, см. ниже)
-show_volume: true       # ползунок громкости
-show_chips: false       # ряд чипов вход/выход/приложения/питание (то же есть в меню «⋯»)
+show_background: true   # background from the cover
+show_spectrum: true     # animated level bars behind the controls while playing
+show_volume: true       # volume slider
+show_chips: false       # input/output/apps/power chips (the same is in the "⋯" menu)
 ```
 
-Внешний вид повторяет экран воспроизведения приложения Eversolo: источник и значки DSP/EQ/Sub, спектра и VU сверху,
-формат файла и выход под названием трека. `layout: auto`: портретный вид, когда экран держат вертикально
-или карточка уже 460 px, иначе альбомный.
-Кнопки, которые текущий источник не поддерживает (например перемотка в Bluetooth), выключаются.
+The look follows the Eversolo app's now-playing screen: source and DSP/EQ/Sub, spectrum and VU badges on top,
+file format and output under the track title. `layout: auto` uses the portrait layout when the screen is held
+upright or the card is narrower than 460 px, landscape otherwise.
+Buttons the current source does not support (for example seeking over Bluetooth) are disabled.
 
-### Зеркало экрана
+## Screen mirror card
 
 ```yaml
 type: custom:eversolo-mirror-card
 entity: media_player.eversolo
-show_nav: true          # кнопки «Назад», «Домой», громкость под картинкой
+show_nav: true          # Back, Home and volume buttons under the picture
 ```
 
-Это то же, что «Зеркалирование экрана» в приложении Eversolo. Карточка показывает экран плеера, а тапы и свайпы
-по ней передаются на плеер. Видео (H.264) идёт через Home Assistant по websocket, отдельные порты открывать не нужно.
-Декодирует браузер через WebCodecs, поэтому нужен Chrome, Edge или Safari и HA по HTTPS (или localhost).
-Поток запускается, когда карточка видна, и останавливается через 15 с после закрытия.
+This is the same as "Screen mirroring" in the Eversolo app. The card shows the player's screen, and taps and
+swipes on it are sent to the player. The video (H.264) goes through Home Assistant over the websocket, so no
+extra ports need to be opened. The browser decodes it with WebCodecs, so you need Chrome, Edge or Safari and
+Home Assistant over HTTPS (or localhost). The stream starts when the card is visible and stops 15 s after it
+is closed. When the player is off, the card shows "Device offline" in the Home Assistant language and
+reconnects as soon as the player is back.
 
-## Сервисы
+## Services
 
 ```yaml
-action: eversolo.set_input       # data: entity_id, name (название или tag из input_list)
+action: eversolo.set_input       # data: entity_id, name (name or tag from input_list)
 action: eversolo.set_output      # data: entity_id, name
 action: eversolo.set_loop_mode   # data: entity_id, mode: repeat_all | repeat_one | shuffle | play_once
 action: eversolo.vu_next         # data: entity_id
 action: eversolo.spectrum_next   # data: entity_id
-action: eversolo.open_app        # data: entity_id, name (название или packageName из app_list)
-action: eversolo.power           # data: entity_id, name (название или tag из power_list)
-action: eversolo.request         # data: entity_id, path  -> response: сырой ответ устройства
+action: eversolo.open_app        # data: entity_id, name (name or packageName from app_list)
+action: eversolo.power           # data: entity_id, name (name or tag from power_list)
+action: eversolo.request         # data: entity_id, path  -> response: the device's raw reply
 ```
 
-Атрибуты `media_player`: `input`, `input_list`, `output`, `output_list`, `loop_mode`, `vu_mode`,
-`spectrum_mode`, `app`, `app_list`, `power_list`, `codec`, `bits`, `sample_rate`, `output_format`,
+`media_player` attributes: `input`, `input_list`, `output`, `output_list`, `loop_mode`, `vu_mode`,
+`spectrum_mode`, `app`, `app_list`, `power_list`, `codec`, `bits`, `sample_rate`, `channels`, `bitrate`,
+`output_format`, `output_codec`, `output_rate`, `output_bits`, `source_name`, `dsp`, `eq`, `sub`,
 `volume_display`, `model`, `host`.
 
-## Как это устроено и что важно знать
-
-* Состояние и список входов/выходов опрашиваются каждые 2 секунды, как в приложении. Меню питания и список
-  приложений — раз в 5 минут.
-* Позиция, длительность и перемотка в миллисекундах.
-* Режимы повтора: 0 повтор списка, 1 повтор трека, 2 случайный порядок, 3 список один раз.
-* VU и спектр: устройство само листает режимы по кругу (как кнопки в приложении). Выбрать конкретный режим
-  нельзя, текущий виден в `vu_mode` / `spectrum_mode`.
-* Отдельной команды «выключить дисплей» в API нет. Если в меню питания вашего плеера есть «выключить экран»,
-  для него появится кнопка.
-* Переключения «текущего музыкального сервиса» в API тоже нет: `getSupportServer` отдаёт только теги, а
-  `setDisplayMusicServerTag` скрывает/показывает вкладку. Вместо этого можно открыть приложение на плеере.
-* Индикаторы уровня в карточке — анимация: плеер рисует спектр по реальному звуку только на своём экране,
-  через сетевой API уровни не отдаются. Фон карточки — размытая обложка плюс её основные цвета.
-
-## Проверено ли
-
-Протокол восстановлен из декомпилированного приложения. Логика интеграции проверена тестами на заглушках
-Home Assistant с ответами в формате приложения, карточка — в headless Chromium. На живом устройстве
-проверены подключение, состояние, входы/выходы. Остальное (меню питания, приложения, VU/спектр в новой
-версии) стоит проверить на вашем плеере; при расхождениях пришлите вывод `eversolo.request` для нужного пути.
-
-## Разработка
+## Development
 
 ```
-custom_components/eversolo/      интеграция
-  www/eversolo-player-card.js    карточка
-tools/eversolo_client.py         автономный CLI-клиент для проверки протокола
-docs/protocol.md                 описание протокола
-docs/ui_reference/               разметка и иконки оригинального приложения
+custom_components/eversolo/      the integration
+  www/eversolo-player-card.js    player card and screen mirror card
+  www/eversolo-icons.js          eversolo:* icon set
+tools/eversolo_client.py         standalone CLI client for protocol checks
+docs/protocol.md                 protocol description
+docs/ui_reference/               layouts and icons of the original app
 ```
 
-## Лицензия
+## License
 
-Не указана. Это неофициальный проект, не связанный с Eversolo.
+Not specified. This is an unofficial project, not affiliated with Eversolo.
