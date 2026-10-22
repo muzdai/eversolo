@@ -8,7 +8,7 @@
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
 window.customCards = window.customCards || [];
-const EVERSOLO_CARD_VERSION = "2.5.1";
+const EVERSOLO_CARD_VERSION = "2.6.0";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -724,6 +724,21 @@ const MIRROR_STRINGS = {
         insecure: "Для экрана откройте Home Assistant по HTTPS: браузеры разрешают декодирование видео только там.", failed: "Не удалось запустить трансляцию: {e}",
         back: "Назад", home: "Домой", voldown: "Тише", volup: "Громче" },
 };
+/* Shown instead of the error when the player cannot be reached (switched off, asleep, unplugged). */
+const MIRROR_OFFLINE = {
+  en: ["Device offline", "Tap to retry"], ru: ["Устройство не в сети", "Нажмите, чтобы повторить"],
+  uk: ["Пристрій не в мережі", "Натисніть, щоб повторити"], be: ["Прылада не ў сетцы", "Націсніце, каб паўтарыць"],
+  ka: ["მოწყობილობა ხაზგარეშეა", "შეეხეთ ხელახლა საცდელად"], de: ["Gerät offline", "Zum Wiederholen tippen"],
+  fr: ["Appareil hors ligne", "Touchez pour réessayer"], es: ["Dispositivo sin conexión", "Toca para reintentar"],
+  it: ["Dispositivo offline", "Tocca per riprovare"], pt: ["Dispositivo offline", "Toque para tentar novamente"],
+  nl: ["Apparaat offline", "Tik om opnieuw te proberen"], pl: ["Urządzenie offline", "Dotknij, aby ponowić"],
+  cs: ["Zařízení je offline", "Klepnutím zkusíte znovu"], tr: ["Cihaz çevrimdışı", "Yeniden denemek için dokunun"],
+  hy: ["Սարքը ցանցից դուրս է", "Հպեք՝ կրկին փորձելու համար"], az: ["Cihaz oflayndır", "Təkrar cəhd üçün toxunun"],
+  kk: ["Құрылғы желіден тыс", "Қайталау үшін түртіңіз"], lv: ["Ierīce bezsaistē", "Pieskarieties, lai mēģinātu vēlreiz"],
+  lt: ["Įrenginys neprisijungęs", "Palieskite, kad bandytumėte dar kartą"], et: ["Seade on võrguühenduseta", "Puudutage uuesti proovimiseks"],
+  zh: ["设备离线", "点击重试"], ja: ["デバイスはオフラインです", "タップして再試行"], ko: ["기기가 오프라인입니다", "탭하여 다시 시도"],
+};
+const OFFLINE_RETRY_MS = 15000;
 const MIRROR_ICONS = {
   back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z",
   home: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
@@ -764,7 +779,17 @@ class EversoloMirrorCard extends HTMLElement {
   set hass(hass) {
     const first = !this._hass;
     this._hass = hass;
-    if (first && this.isConnected) this._start();
+    if (first) { this._wasOnline = this._entityOnline(); if (this.isConnected) this._start(); return; }
+    // Player came back (entity available again): reconnect right away instead of waiting for the retry timer.
+    // Only on the transition, so a reachable-but-refusing player is not hammered on every state update.
+    const online = this._entityOnline();
+    if (this._offline && online && this._wasOnline === false) this._restart();
+    this._wasOnline = online;
+  }
+
+  _entityOnline() {
+    const st = this._hass && this._hass.states[this._config.entity];
+    return !!st && st.state !== "unavailable" && st.state !== "unknown";
   }
 
   getCardSize() { return 6; }
@@ -775,6 +800,11 @@ class EversoloMirrorCard extends HTMLElement {
       (s) => s.startsWith("media_player.") && hass.states[s].attributes && "vu_mode" in hass.states[s].attributes,
     );
     return { entity: e || "media_player.eversolo" };
+  }
+
+  _offlineText() {
+    const lang = ((this._hass && (this._hass.locale?.language || this._hass.language)) || "en").toLowerCase();
+    return MIRROR_OFFLINE[lang] || MIRROR_OFFLINE[lang.split("-")[0]] || MIRROR_OFFLINE.en;
   }
 
   _t(key) {
@@ -794,6 +824,12 @@ class EversoloMirrorCard extends HTMLElement {
         .msg { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:16px;
                font-size:14px; opacity:.75; background:rgba(0,0,0,.55); cursor:pointer; }
         .msg[hidden] { display:none; }
+        .msg.offline { opacity:1; background:radial-gradient(ellipse at center, #1a1a1d 0%, #050506 75%); align-content:center; gap:10px; }
+        .msg .big { font-size:clamp(18px, 4.2vw, 28px); font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+                    color:#e9e9ec; display:flex; align-items:center; gap:12px; }
+        .msg .big::before { content:""; width:10px; height:10px; border-radius:50%; background:#e5484d;
+                            box-shadow:0 0 10px 2px rgba(229,72,77,.55); flex:none; }
+        .msg .small { font-size:12px; letter-spacing:.06em; opacity:.45; }
         .nav { display:flex; justify-content:center; gap:28px; padding:6px 0 8px; background:#0b0b0c; }
         .nav.hide { display:none; }
         .nav button { all:unset; cursor:pointer; width:40px; height:40px; display:grid; place-items:center; border-radius:50%; }
@@ -808,7 +844,7 @@ class EversoloMirrorCard extends HTMLElement {
     this._root = this.shadowRoot;
     this._canvas = this._root.getElementById("cv");
     this._ctx = this._canvas.getContext("2d");
-    this._root.getElementById("msg").addEventListener("click", () => { if (this._ended) this._restart(); });
+    this._root.getElementById("msg").addEventListener("click", () => { if (this._ended || this._offline) this._restart(); });
     this._root.getElementById("nav").addEventListener("click", (ev) => {
       const btn = ev.composedPath().find((el) => el && el.dataset && el.dataset.key);
       if (!btn) return;
@@ -829,12 +865,34 @@ class EversoloMirrorCard extends HTMLElement {
   disconnectedCallback() {
     document.removeEventListener("visibilitychange", this._vis);
     this._stop();
+    this._clearRetry();
   }
 
   _status(text) {
     const m = this._root.getElementById("msg");
+    m.classList.remove("offline");
     m.textContent = text || "";
     m.hidden = !text;
+  }
+
+  _showOffline() {
+    this._offline = true;
+    const [big, small] = this._offlineText();
+    const m = this._root.getElementById("msg");
+    m.classList.add("offline");
+    m.replaceChildren();
+    for (const [cls, text] of [["big", big], ["small", small]]) {
+      const el = document.createElement("div");
+      el.className = cls; el.textContent = text; m.appendChild(el);
+    }
+    m.hidden = false;
+    this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    this._clearRetry();
+    this._retry = setTimeout(() => { this._retry = null; if (this._offline && this.isConnected) this._restart(); }, OFFLINE_RETRY_MS);
+  }
+
+  _clearRetry() {
+    if (this._retry) { clearTimeout(this._retry); this._retry = null; }
   }
 
   async _start() {
@@ -843,14 +901,23 @@ class EversoloMirrorCard extends HTMLElement {
     if (typeof VideoDecoder === "undefined") { this._status(this._t(window.isSecureContext ? "nocodec" : "insecure")); return; }
     this._starting = true;
     this._ended = false;
-    this._status(this._t("connecting"));
+    this._clearRetry();
+    if (!this._entityOnline()) { this._starting = false; this._showOffline(); return; }
+    if (!this._offline) this._status(this._t("connecting"));
     try {
       this._unsub = await this._hass.connection.subscribeMessage((m) => this._onMessage(m), {
         type: "eversolo/mirror/subscribe", entity_id: this._config.entity,
       });
+      if (this._offline) { this._offline = false; this._status(this._t("connecting")); }
     } catch (err) {
-      this._ended = true;
-      this._status(this._t("failed").replace("{e}", (err && (err.message || err.code)) || err));
+      // The usual cause is a switched-off player (connection refused / timeout to its address).
+      // Only a missing integration command is worth spelling out; everything else reads as "offline".
+      if (err && err.code === "unknown_command") {
+        this._ended = true;
+        this._status(this._t("failed").replace("{e}", err.message || err.code));
+      } else {
+        this._showOffline();
+      }
     } finally {
       this._starting = false;
     }
@@ -874,7 +941,11 @@ class EversoloMirrorCard extends HTMLElement {
   _onMessage(m) {
     if (m.type === "config") return this._configure(m);
     if (m.type === "frame") return this._frame(m);
-    if (m.type === "ended") { this._ended = true; this._stop(); this._status(this._t("ended")); }
+    if (m.type === "ended") {
+      this._stop();
+      if (!this._entityOnline()) { this._showOffline(); return; }
+      this._ended = true; this._status(this._t("ended"));
+    }
   }
 
   _configure(m) {
