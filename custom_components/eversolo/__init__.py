@@ -45,6 +45,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # Before talking to the player: the cards (and icons) must load even while it is off,
+    # otherwise dashboards show "Custom element doesn't exist" during setup retries.
+    await _async_register_card(hass)
     session = async_get_clientsession(hass)
     api = EversoloApi(session, entry.data[CONF_HOST], entry.data.get(CONF_PORT, DEFAULT_PORT))
     coordinator = EversoloCoordinator(hass, api, entry.title)
@@ -52,7 +55,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.mirror = MirrorSession(hass, api)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-    await _async_register_card(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     _async_register_services(hass)

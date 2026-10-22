@@ -9,6 +9,6 @@
   "iot_class": "local_polling",
   "integration_type": "device",
   "requirements": [],
-  "version": "2.6.1",
+  "version": "2.6.2",
   "zeroconf": ["_eversolo._tcp.local."]
 }
