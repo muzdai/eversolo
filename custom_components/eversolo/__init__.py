@@ -16,13 +16,26 @@ from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EversoloApi, EversoloError
-from .const import CARD_URL, CONF_HOST, ICONS_URL, CONF_PORT, DEFAULT_PORT, DOMAIN, LOOP_MODES, VERSION
+from .const import (
+    CARD_URL,
+    CLIENT_NAME,
+    CONF_CLIENT_UUID,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_PORT,
+    DEFAULT_PORT,
+    DOMAIN,
+    ICONS_URL,
+    LOOP_MODES,
+    VERSION,
+)
 from .coordinator import EversoloCoordinator
 from .mirror import MirrorSession
+from .wol import normalize_mac
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.BUTTON]
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
 
 ATTR_ENTITY_ID = "entity_id"
 ATTR_NAME = "name"
@@ -51,19 +64,64 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     api = EversoloApi(session, entry.data[CONF_HOST], entry.data.get(CONF_PORT, DEFAULT_PORT))
     coordinator = EversoloCoordinator(hass, api, entry.title)
-    await coordinator.async_config_entry_first_refresh()
+    # No ConfigEntryNotReady while the player is off: the entities must exist (unavailable)
+    # so the power switch can wake it up. They come alive with the first successful poll.
+    await coordinator.async_refresh()
+    if not coordinator.last_update_success:
+        _LOGGER.info("%s is offline; entities stay unavailable until it answers", entry.title)
     coordinator.mirror = MirrorSession(hass, api)
+    coordinator.settings = _reload_settings(entry)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    _async_setup_mac_learning(hass, entry, coordinator)
     _async_register_services(hass)
     return True
 
 
+def _reload_settings(entry: ConfigEntry) -> tuple:
+    return (entry.title, entry.data.get(CONF_HOST), entry.data.get(CONF_PORT, DEFAULT_PORT))
+
+
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload after the options flow changed name, host or port."""
+    """Reload after the options flow changed name, host or port (not for a learned MAC)."""
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is not None and getattr(coordinator, "settings", None) == _reload_settings(entry):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+@callback
+def _async_setup_mac_learning(hass: HomeAssistant, entry: ConfigEntry, coordinator: EversoloCoordinator) -> None:
+    """Read the MAC for Wake on LAN from the device (net_mac in the connect reply) once it answers."""
+    state = {"busy": False, "done": False}
+
+    async def _async_learn() -> None:
+        try:
+            resp = await coordinator.api.connect(CLIENT_NAME, entry.data[CONF_CLIENT_UUID], ask_authority=False)
+        except EversoloError as err:
+            _LOGGER.debug("Could not read the MAC address: %s", err)
+            return
+        finally:
+            state["busy"] = False
+        device = resp.get("device") if isinstance(resp.get("device"), dict) else {}
+        mac = normalize_mac(resp.get("net_mac") or device.get("net_mac") or device.get("mac"))
+        state["done"] = True
+        if mac and mac != entry.data.get(CONF_MAC):
+            _LOGGER.debug("Learned MAC %s for Wake on LAN", mac)
+            hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_MAC: mac})
+            coordinator.async_update_listeners()
+
+    @callback
+    def _check() -> None:
+        if state["done"] or state["busy"] or not coordinator.last_update_success:
+            return
+        state["busy"] = True
+        entry.async_create_background_task(hass, _async_learn(), "eversolo learn mac")
+
+    entry.async_on_unload(coordinator.async_add_listener(_check))
+    _check()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

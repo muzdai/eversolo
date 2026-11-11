@@ -1,6 +1,7 @@
 """Config flow: pair with the device (confirm on its screen) and create the entry."""
 from __future__ import annotations
 
+import ipaddress
 import uuid
 from typing import Any
 
@@ -12,11 +13,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api import EversoloApi, EversoloError
+from .wol import normalize_mac
 from .const import (
     CLIENT_NAME,
+    CONF_BROADCAST,
     CONF_CLIENT_UUID,
     CONF_FIRMWARE,
     CONF_HOST,
+    CONF_MAC,
     CONF_MODEL,
     CONF_NAME,
     CONF_PORT,
@@ -40,6 +44,7 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         self._host: str = ""
         self._port: int = DEFAULT_PORT
         self._model: str | None = None
+        self._mac: str | None = None
         self._client_uuid: str = str(uuid.uuid4())
 
     def _api(self) -> EversoloApi:
@@ -52,11 +57,15 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         self._host = discovery_info.host
         self._port = int(props.get("port") or discovery_info.port or DEFAULT_PORT)
         self._model = props.get("name") or None
+        self._mac = normalize_mac(props.get("net_mac"))
         self._name = props.get("deviceName") or self._model or DEFAULT_NAME
         # Already added (manually or earlier): match by address as well as by id.
         self._async_abort_entries_match({CONF_HOST: self._host})
         await self.async_set_unique_id(props.get("uuid") or discovery_info.host)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: self._host, CONF_PORT: self._port})
+        updates = {CONF_HOST: self._host, CONF_PORT: self._port}
+        if self._mac:
+            updates[CONF_MAC] = self._mac
+        self._abort_if_unique_id_configured(updates=updates)
         self.context["title_placeholders"] = {"name": self._name}
         return await self.async_step_user()
 
@@ -122,6 +131,7 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_CLIENT_UUID: self._client_uuid,
                 CONF_FIRMWARE: resp.get("firmware"),
                 CONF_MODEL: model,
+                CONF_MAC: normalize_mac(resp.get("net_mac")) or self._mac,
             },
         )
 
@@ -136,27 +146,46 @@ class EversoloOptionsFlow(OptionsFlow):
             name = user_input[CONF_NAME].strip() or DEFAULT_NAME
             host = user_input[CONF_HOST].strip()
             port = user_input.get(CONF_PORT, DEFAULT_PORT)
-            api = EversoloApi(async_get_clientsession(self.hass), host, port)
-            try:
-                resp = await api.connect(CLIENT_NAME, entry.data[CONF_CLIENT_UUID], ask_authority=False)
-            except EversoloError:
-                errors["base"] = "cannot_connect"
-            else:
-                if resp.get("status") != 200:
-                    errors["base"] = "not_authorized"
+            mac_text = (user_input.get(CONF_MAC) or "").strip()
+            mac = normalize_mac(mac_text)
+            broadcast = (user_input.get(CONF_BROADCAST) or "").strip() or None
+            if mac_text and not mac:
+                errors[CONF_MAC] = "invalid_mac"
+            elif broadcast and not _is_ipv4(broadcast):
+                errors[CONF_BROADCAST] = "invalid_broadcast"
+            elif (host, port) != (entry.data[CONF_HOST], entry.data.get(CONF_PORT, DEFAULT_PORT)):
+                # Only a new address needs the player online (and paired) to check it.
+                api = EversoloApi(async_get_clientsession(self.hass), host, port)
+                try:
+                    resp = await api.connect(CLIENT_NAME, entry.data[CONF_CLIENT_UUID], ask_authority=False)
+                except EversoloError:
+                    errors["base"] = "cannot_connect"
                 else:
-                    self.hass.config_entries.async_update_entry(
-                        entry,
-                        title=name,
-                        data={**entry.data, CONF_HOST: host, CONF_PORT: port},
-                    )
-                    return self.async_create_entry(title="", data={})
+                    if resp.get("status") != 200:
+                        errors["base"] = "not_authorized"
+                    mac = mac or normalize_mac(resp.get("net_mac"))
+            if not errors:
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    title=name,
+                    data={**entry.data, CONF_HOST: host, CONF_PORT: port, CONF_MAC: mac, CONF_BROADCAST: broadcast},
+                )
+                return self.async_create_entry(title="", data={})
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default=entry.title): str,
                 vol.Required(CONF_HOST, default=entry.data[CONF_HOST]): str,
                 vol.Optional(CONF_PORT, default=entry.data.get(CONF_PORT, DEFAULT_PORT)): int,
+                vol.Optional(CONF_MAC, description={"suggested_value": entry.data.get(CONF_MAC)}): str,
+                vol.Optional(CONF_BROADCAST, description={"suggested_value": entry.data.get(CONF_BROADCAST)}): str,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+
+def _is_ipv4(value: str) -> bool:
+    try:
+        return ipaddress.ip_address(value).version == 4
+    except ValueError:
+        return False

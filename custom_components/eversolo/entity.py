@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_FIRMWARE, CONF_MODEL, DEFAULT_MODEL, DOMAIN
+from .const import CONF_FIRMWARE, CONF_MAC, CONF_MODEL, DEFAULT_MODEL, DOMAIN
 from .coordinator import EversoloCoordinator
 
 
@@ -26,6 +26,8 @@ class EversoloEntity(CoordinatorEntity[EversoloCoordinator]):
             sw_version=info.get("version") or entry.data.get(CONF_FIRMWARE),
             configuration_url=coordinator.api.base,
         )
+        if mac := entry.data.get(CONF_MAC):
+            self._attr_device_info["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
 
     @property
     def available(self) -> bool:

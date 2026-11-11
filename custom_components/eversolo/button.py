@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -17,10 +17,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         EversoloDisplayButton(coordinator, entry, "vu"),
         EversoloDisplayButton(coordinator, entry, "spectrum"),
     ]
-    # One button per entry of the device's power menu (standby, screen off, reboot, ...).
-    # Names come from the device in its UI language.
-    entities += [EversoloPowerButton(coordinator, entry, opt) for opt in coordinator.power_options]
     async_add_entities(entities)
+
+    # One button per entry of the device's power menu (standby, screen off, reboot, ...).
+    # Names come from the device in its UI language. The menu is read once the player answers,
+    # which may be after setup when it was off, so buttons are added as entries show up.
+    added: set[str] = set()
+
+    @callback
+    def _add_power_buttons() -> None:
+        new = [opt for opt in coordinator.power_options if opt["tag"] not in added]
+        if new:
+            added.update(opt["tag"] for opt in new)
+            async_add_entities([EversoloPowerButton(coordinator, entry, opt) for opt in new])
+
+    _add_power_buttons()
+    entry.async_on_unload(coordinator.async_add_listener(_add_power_buttons))
 
 
 class EversoloDisplayButton(EversoloEntity, ButtonEntity):

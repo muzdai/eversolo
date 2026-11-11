@@ -4,7 +4,7 @@ Values below are taken from the decompiled Eversolo Controller app (see docs/pro
 """
 
 DOMAIN = "eversolo"
-VERSION = "2.6.2"
+VERSION = "2.7.0"
 
 CONF_NAME = "name"
 CONF_HOST = "host"
@@ -12,6 +12,8 @@ CONF_PORT = "port"
 CONF_CLIENT_UUID = "client_uuid"
 CONF_FIRMWARE = "firmware"
 CONF_MODEL = "model"
+CONF_MAC = "mac"
+CONF_BROADCAST = "broadcast_address"
 
 DEFAULT_PORT = 9529
 DEFAULT_NAME = "Eversolo"
@@ -61,6 +63,15 @@ SPECTRUM_OPEN_TYPE = 1
 
 # getPowerOption entry handled by a separate dialog in the app, not a one-shot action.
 POWER_TAG_TIMER = "timeshutdown"
+# Power-menu tags for switching the player off, best first (getPowerOption / setPowerOption).
+POWER_OFF_TAGS = ("poweroff", "shutdown", "standby", "sleep")
+
+# Wake on LAN, as the app's WakeThread: magic packet (6 x 0xFF + MAC x 16) by UDP broadcast.
+# The app sends to port 9517; 9 is the usual WoL port. The NIC accepts the packet on any port.
+WOL_PORTS = (9, 9517)
+# After "on" the player needs time to boot; after "off" it may still answer for a while.
+SWITCH_ON_GRACE_SECONDS = 120
+SWITCH_OFF_GRACE_SECONDS = 45
 
 # getStreamMediaAppList appStatus: 0 installed, 1 not installed, 2 update available.
 APP_STATUS_OPENABLE = (0, 2)

@@ -27,17 +27,25 @@
     "step": {
       "init": {
         "title": "Eversolo settings",
-        "description": "Change the name, IP address or port. Existing entity ids are kept; rename entities in Settings if you want new ids.",
+        "description": "Change the name, IP address or port. Existing entity ids are kept; rename entities in Settings if you want new ids.\n\nThe MAC address is used to wake the player (Wake on LAN). It is read from the player automatically; enter it only if the power switch says it is unknown. Leave the broadcast address empty unless Home Assistant is in another subnet than the player.",
         "data": {
           "name": "Name",
           "host": "Host / IP address",
-          "port": "Port"
+          "port": "Port",
+          "mac": "MAC address (Wake on LAN)",
+          "broadcast_address": "Broadcast address for Wake on LAN"
+        },
+        "data_description": {
+          "mac": "Read from the player automatically, e.g. aa:bb:cc:dd:ee:ff",
+          "broadcast_address": "Default: the player's subnet (x.x.x.255) and 255.255.255.255"
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot reach the device. Check the address and that it is on the same network.",
-      "not_authorized": "The device has not confirmed the connection."
+      "not_authorized": "The device has not confirmed the connection.",
+      "invalid_mac": "Not a valid MAC address.",
+      "invalid_broadcast": "Not a valid IPv4 address."
     }
   },
   "entity": {
@@ -55,6 +63,11 @@
       },
       "spectrum": {
         "name": "Spectrum: next mode"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Power"
       }
     }
   },
