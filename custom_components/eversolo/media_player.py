@@ -348,12 +348,21 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
                 changes["position"] = int((pos + max(0.0, elapsed)) * 1000)
             self.coordinator.apply(state=changes)
 
+    async def _fresh_state(self) -> None:
+        """The player only has toggles for play/pause and mute, so "pause" on a stale state
+        could start playback. Read it right before deciding (unless a command was just sent
+        and the optimistic state is newer than what the player reports)."""
+        if not self.coordinator.command_pending:
+            await self.coordinator.async_refresh()
+
     async def async_media_play(self) -> None:
+        await self._fresh_state()
         if self.state != MediaPlayerState.PLAYING:
             await self.coordinator.api.play_pause()
             self._apply_playing(True)
 
     async def async_media_pause(self) -> None:
+        await self._fresh_state()
         if self.state == MediaPlayerState.PLAYING:
             await self.coordinator.api.play_pause()
             self._apply_playing(False)
@@ -397,6 +406,7 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         await self._refresh()
 
     async def async_mute_volume(self, mute: bool) -> None:
+        await self._fresh_state()
         if bool(self.is_volume_muted) != mute:
             await self.coordinator.api.key("Mute")
             self.coordinator.apply(volume={"isMute": mute})

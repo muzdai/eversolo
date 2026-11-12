@@ -11,9 +11,10 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.loader import async_get_integration
 
 from .api import EversoloApi, EversoloError
 from .const import (
@@ -27,7 +28,6 @@ from .const import (
     DOMAIN,
     ICONS_URL,
     LOOP_MODES,
-    VERSION,
 )
 from .coordinator import EversoloCoordinator
 from .mirror import MirrorSession
@@ -128,9 +128,31 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         coordinator = hass.data[DOMAIN].pop(entry.entry_id, None)
-        if coordinator is not None and getattr(coordinator, "mirror", None):
-            await coordinator.mirror.async_shutdown()
+        if coordinator is not None:
+            coordinator.async_shutdown_timers()
+            if getattr(coordinator, "mirror", None):
+                await coordinator.mirror.async_shutdown()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """With the last player removed, take the card out of the dashboard resources again."""
+    if any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
+        return
+    resources = _lovelace_resources(hass)
+    if resources is None:
+        return
+    try:
+        for item in list(resources.async_items()):
+            if str(item.get("url", "")).split("?")[0] == CARD_URL:
+                await resources.async_delete_item(item["id"])
+    except Exception as err:  # noqa: BLE001 - removal must not fail because of the frontend helper
+        _LOGGER.debug("Could not remove the card resource: %s", err)
+
+
+async def _async_version(hass: HomeAssistant) -> str:
+    """The version from manifest.json, used to bust the browser cache of the card files."""
+    return str((await async_get_integration(hass, DOMAIN)).version or "0")
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
@@ -152,24 +174,33 @@ async def _async_register_card(hass: HomeAssistant) -> None:
             StaticPathConfig(ICONS_URL, os.path.join(www, "eversolo-icons.js"), False),
         ]
     )
-    frontend.add_extra_js_url(hass, f"{ICONS_URL}?v={VERSION}")
-    if not await _async_register_card_resource(hass):
-        frontend.add_extra_js_url(hass, f"{CARD_URL}?v={VERSION}")
+    version = await _async_version(hass)
+    frontend.add_extra_js_url(hass, f"{ICONS_URL}?v={version}")
+    if not await _async_register_card_resource(hass, version):
+        frontend.add_extra_js_url(hass, f"{CARD_URL}?v={version}")
 
 
-async def _async_register_card_resource(hass: HomeAssistant) -> bool:
-    """Add or update the card's dashboard resource. False when resources are YAML-managed."""
+def _lovelace_resources(hass: HomeAssistant):
+    """The storage-mode resource collection, or None when resources are YAML-managed."""
     lovelace = hass.data.get("lovelace")
     resources = getattr(lovelace, "resources", None)
     if resources is None and isinstance(lovelace, dict):
         resources = lovelace.get("resources")
     if resources is None or not hasattr(resources, "async_create_item"):
+        return None
+    return resources
+
+
+async def _async_register_card_resource(hass: HomeAssistant, version: str) -> bool:
+    """Add or update the card's dashboard resource. False when resources are YAML-managed."""
+    resources = _lovelace_resources(hass)
+    if resources is None:
         return False
     try:
         if not getattr(resources, "loaded", True):
             await resources.async_load()
             resources.loaded = True
-        url = f"{CARD_URL}?v={VERSION}"
+        url = f"{CARD_URL}?v={version}"
         found = False
         for item in list(resources.async_items()):
             item_url = str(item.get("url", ""))
@@ -256,7 +287,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         await coord.api.power(option["tag"])
 
     async def request(call: ServiceCall) -> ServiceResponse:
-        """Raw GET to the device, for probing endpoints."""
+        """Raw GET to the device, for probing endpoints. Administrators only: it can reach
+        every function of the player, including its settings."""
+        if call.context.user_id:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None or not user.is_admin:
+                raise Unauthorized(context=call.context)
         coord = _coordinator_for(hass, call.data[ATTR_ENTITY_ID])
         path = call.data["path"]
         if not path.startswith("/"):

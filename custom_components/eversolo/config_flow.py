@@ -55,12 +55,24 @@ class EversoloConfigFlow(ConfigFlow, domain=DOMAIN):
         # (e.g. DMP-A6), deviceName the name set on the device, uuid / net_mac its ids.
         props = {k: v for k, v in (discovery_info.properties or {}).items() if isinstance(v, str)}
         self._host = discovery_info.host
-        self._port = int(props.get("port") or discovery_info.port or DEFAULT_PORT)
+        try:
+            self._port = int(props.get("port") or discovery_info.port or DEFAULT_PORT)
+        except ValueError:
+            self._port = DEFAULT_PORT
         self._model = props.get("name") or None
         self._mac = normalize_mac(props.get("net_mac"))
         self._name = props.get("deviceName") or self._model or DEFAULT_NAME
         # Already added (manually or earlier): match by address as well as by id.
         self._async_abort_entries_match({CONF_HOST: self._host})
+        # The same player at a new address (DHCP): the ids in discovery and in the entry may
+        # differ, the MAC does not. Point the entry at the new address; it reloads itself.
+        if self._mac:
+            for entry in self._async_current_entries():
+                if self._mac in (entry.data.get(CONF_MAC), normalize_mac(entry.unique_id)):
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, CONF_HOST: self._host, CONF_PORT: self._port, CONF_MAC: self._mac}
+                    )
+                    return self.async_abort(reason="already_configured")
         await self.async_set_unique_id(props.get("uuid") or discovery_info.host)
         updates = {CONF_HOST: self._host, CONF_PORT: self._port}
         if self._mac:

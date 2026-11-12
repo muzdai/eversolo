@@ -5,10 +5,11 @@ import ipaddress
 import logging
 import re
 import socket
+import time
 
 from homeassistant.core import HomeAssistant
 
-from .const import WOL_PORTS
+from .const import WOL_PORTS, WOL_REPEAT, WOL_REPEAT_DELAY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,12 +51,15 @@ def broadcast_targets(host: str, broadcast: str | None) -> list[str]:
 def _send(packet: bytes, targets: list[str]) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        for target in targets:
-            for port in WOL_PORTS:
-                try:
-                    sock.sendto(packet, (target, port))
-                except OSError as err:
-                    _LOGGER.debug("WoL to %s:%s failed: %s", target, port, err)
+        for attempt in range(WOL_REPEAT):
+            if attempt:
+                time.sleep(WOL_REPEAT_DELAY_SECONDS)
+            for target in targets:
+                for port in WOL_PORTS:
+                    try:
+                        sock.sendto(packet, (target, port))
+                    except OSError as err:
+                        _LOGGER.debug("WoL to %s:%s failed: %s", target, port, err)
 
 
 async def async_wake(hass: HomeAssistant, mac: str, host: str, broadcast: str | None = None) -> None:

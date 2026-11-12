@@ -112,6 +112,9 @@ class EversoloPowerSwitch(EversoloEntity, SwitchEntity):
             )
         await async_wake(self.hass, self._mac, self._entry.data[CONF_HOST], self._entry.data.get(CONF_BROADCAST))
         self._expect(True, SWITCH_ON_GRACE_SECONDS)
+        self.coordinator.poll_fast(SWITCH_ON_GRACE_SECONDS)
+        # Polling again reschedules the next poll with the fast interval.
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         tag = power_off_tag(self.coordinator.power_options)

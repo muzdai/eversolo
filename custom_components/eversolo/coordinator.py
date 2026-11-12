@@ -13,7 +13,14 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import EversoloApi, EversoloError
-from .const import CONFIRM_DELAY_SECONDS, DOMAIN, SCAN_INTERVAL_SECONDS, SLOW_REFRESH_SECONDS
+from .const import (
+    CONFIRM_DELAY_SECONDS,
+    DOMAIN,
+    OFFLINE_AFTER_FAILURES,
+    OFFLINE_SCAN_INTERVAL_SECONDS,
+    SCAN_INTERVAL_SECONDS,
+    SLOW_REFRESH_SECONDS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,12 +45,23 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_update_success_time: datetime | None = None
         self._slow_at: float | None = None
         self._confirm_unsub: CALLBACK_TYPE | None = None
+        self._failures = 0
+        self._fast_until = 0.0
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
             state = await self.api.get_state()
         except EversoloError as err:
+            self._failures += 1
+            if self.data is not None and self.last_update_success and self._failures < OFFLINE_AFTER_FAILURES:
+                # A single lost answer: keep showing the last state instead of flapping to unavailable.
+                _LOGGER.debug("No answer (%s of %s): %s", self._failures, OFFLINE_AFTER_FAILURES, err)
+                return self.data
+            if time.monotonic() >= self._fast_until:
+                self.update_interval = timedelta(seconds=OFFLINE_SCAN_INTERVAL_SECONDS)
             raise UpdateFailed(str(err)) from err
+        self._failures = 0
+        self.update_interval = timedelta(seconds=SCAN_INTERVAL_SECONDS)
         try:
             self.io = await self.api.get_io()
         except EversoloError as err:
@@ -66,6 +84,23 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.apps = await self.api.get_apps()
         except EversoloError as err:
             _LOGGER.debug("App list unavailable: %s", err)
+
+    @callback
+    def poll_fast(self, seconds: float) -> None:
+        """Keep the normal 2 s polling for a while although the player is offline (it was just woken)."""
+        self._fast_until = time.monotonic() + seconds
+        self.update_interval = timedelta(seconds=SCAN_INTERVAL_SECONDS)
+
+    @property
+    def command_pending(self) -> bool:
+        """A command was just sent and the device has not been read back yet."""
+        return self._confirm_unsub is not None
+
+    @callback
+    def async_shutdown_timers(self) -> None:
+        if self._confirm_unsub:
+            self._confirm_unsub()
+            self._confirm_unsub = None
 
     # ---- instant feedback ------------------------------------------------
     @callback

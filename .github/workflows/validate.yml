@@ -1,0 +1,31 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Syntax
+        run: |
+          python -m py_compile custom_components/eversolo/*.py
+          node --check custom_components/eversolo/www/eversolo-player-card.js
+          node --check custom_components/eversolo/www/eversolo-icons.js
+      - name: Tests
+        run: python tests/run.py
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master

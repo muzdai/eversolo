@@ -8,7 +8,10 @@
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
 window.customCards = window.customCards || [];
-const EVERSOLO_CARD_VERSION = "2.7.2";
+// The integration serves this file as ...card.js?v=<version from manifest.json>.
+const EVERSOLO_CARD_VERSION = (() => {
+  try { return new URL(import.meta.url).searchParams.get("v") || "dev"; } catch (e) { return "dev"; }
+})();
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",

@@ -4,7 +4,6 @@ Values below are taken from the decompiled Eversolo Controller app (see docs/pro
 """
 
 DOMAIN = "eversolo"
-VERSION = "2.7.2"
 
 CONF_NAME = "name"
 CONF_HOST = "host"
@@ -23,6 +22,10 @@ MDNS_SERVICE_TYPE = "_eversolo._tcp.local."
 
 # The app polls getState and getInputAndOutputList every 2 s.
 SCAN_INTERVAL_SECONDS = 2
+# While the player is off there is nothing to read: ask less often.
+OFFLINE_SCAN_INTERVAL_SECONDS = 10
+# One lost answer is not "offline": keep the last state for this many failed polls in a row.
+OFFLINE_AFTER_FAILURES = 3
 # After a command, read the device back once it has had time to act on it.
 CONFIRM_DELAY_SECONDS = 1.0
 # Power menu and streaming-app list change rarely.
@@ -69,6 +72,9 @@ POWER_OFF_TAGS = ("poweroff", "shutdown", "standby", "sleep")
 # Wake on LAN, as the app's WakeThread: magic packet (6 x 0xFF + MAC x 16) by UDP broadcast.
 # The app sends to port 9517; 9 is the usual WoL port. The NIC accepts the packet on any port.
 WOL_PORTS = (9, 9517)
+# UDP may get lost: repeat the packet.
+WOL_REPEAT = 3
+WOL_REPEAT_DELAY_SECONDS = 0.1
 # After "on" the player needs time to boot; after "off" it may still answer for a while.
 SWITCH_ON_GRACE_SECONDS = 120
 SWITCH_OFF_GRACE_SECONDS = 45
