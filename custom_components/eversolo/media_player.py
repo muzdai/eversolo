@@ -70,6 +70,7 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         self._pos: float | None = None
         self._pos_at: datetime | None = None
         self._pos_key: tuple | None = None
+        self._pos_raw: float | None = None
         self._pos_synced: datetime | None = None
 
     # ---- raw payload helpers ------------------------------------------
@@ -207,7 +208,11 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         self._pos_synced = stamp
         raw, state = self._raw_position, self.state
         key = (state, self.media_title, self.media_duration)
+        last_raw, self._pos_raw = self._pos_raw, raw
         if raw is not None and self._pos is not None and self._pos_at is not None and key == self._pos_key:
+            if raw == last_raw:
+                # Not moving although "playing": a live input (ARC, optical, ...) or a stall.
+                return
             expected = self._pos
             if state == MediaPlayerState.PLAYING:
                 expected += (stamp - self._pos_at).total_seconds()
