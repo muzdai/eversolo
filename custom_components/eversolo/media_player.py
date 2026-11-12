@@ -50,6 +50,9 @@ OTHER = (
     | MediaPlayerEntityFeature.SELECT_SOURCE
 )
 
+# How far the reported position may drift from the extrapolated one before it is re-stamped.
+POSITION_TOLERANCE_SECONDS = 1.5
+
 REPEAT_TO_LOOP = {RepeatMode.ALL: LOOP_REPEAT_ALL, RepeatMode.ONE: LOOP_REPEAT_ONE, RepeatMode.OFF: LOOP_PLAY_ONCE}
 
 
@@ -64,6 +67,10 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
 
     def __init__(self, coordinator: EversoloCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator, entry, "player")
+        self._pos: float | None = None
+        self._pos_at: datetime | None = None
+        self._pos_key: tuple | None = None
+        self._pos_synced: datetime | None = None
 
     # ---- raw payload helpers ------------------------------------------
     @property
@@ -182,13 +189,41 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         return dur / 1000 if dur else None
 
     @property
-    def media_position(self) -> float | None:
+    def _raw_position(self) -> float | None:
         pos = self._info.get("currentPosition") if self._external else self._state.get("position")
         return pos / 1000 if pos is not None else None
 
+    def _sync_position(self) -> None:
+        """Keep one (position, time) pair for as long as the player follows it.
+
+        The frontend extrapolates the position from this pair while playing. Stamping every
+        2 s poll would change the entity's attributes each time (a state write and a recorder
+        row every 2 s, even when paused), so the pair is replaced only when the state or the
+        track changes or the reported position leaves the expected one (seek, stall).
+        """
+        stamp = self.coordinator.last_update_success_time
+        if stamp is None or stamp is self._pos_synced:
+            return
+        self._pos_synced = stamp
+        raw, state = self._raw_position, self.state
+        key = (state, self.media_title, self.media_duration)
+        if raw is not None and self._pos is not None and self._pos_at is not None and key == self._pos_key:
+            expected = self._pos
+            if state == MediaPlayerState.PLAYING:
+                expected += (stamp - self._pos_at).total_seconds()
+            if abs(raw - expected) <= POSITION_TOLERANCE_SECONDS:
+                return
+        self._pos, self._pos_at, self._pos_key = raw, stamp, key
+
+    @property
+    def media_position(self) -> float | None:
+        self._sync_position()
+        return self._pos
+
     @property
     def media_position_updated_at(self) -> datetime | None:
-        return self.coordinator.last_update_success_time
+        self._sync_position()
+        return self._pos_at if self._pos is not None else None
 
     @property
     def volume_level(self) -> float | None:

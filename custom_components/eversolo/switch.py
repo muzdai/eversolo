@@ -6,9 +6,10 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     CONF_BROADCAST,
@@ -55,6 +56,7 @@ class EversoloPowerSwitch(EversoloEntity, SwitchEntity):
         super().__init__(coordinator, entry, "power")
         self._pending: bool | None = None
         self._pending_until = 0.0
+        self._pending_unsub: CALLBACK_TYPE | None = None
 
     @property
     def _mac(self) -> str | None:
@@ -83,6 +85,24 @@ class EversoloPowerSwitch(EversoloEntity, SwitchEntity):
         self._pending = state
         self._pending_until = time.monotonic() + seconds
         self.async_write_ha_state()
+        # The coordinator does not notify entities about repeated failed polls, so a player
+        # that never woke up would stay "on" forever: re-evaluate when the grace period ends.
+        self._cancel_pending_timer()
+        self._pending_unsub = async_call_later(self.hass, seconds + 0.5, self._async_grace_over)
+
+    @callback
+    def _async_grace_over(self, _now: Any) -> None:
+        self._pending_unsub = None
+        self.async_write_ha_state()
+
+    @callback
+    def _cancel_pending_timer(self) -> None:
+        if self._pending_unsub:
+            self._pending_unsub()
+            self._pending_unsub = None
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._cancel_pending_timer()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         if not self._mac:
@@ -92,7 +112,6 @@ class EversoloPowerSwitch(EversoloEntity, SwitchEntity):
             )
         await async_wake(self.hass, self._mac, self._entry.data[CONF_HOST], self._entry.data.get(CONF_BROADCAST))
         self._expect(True, SWITCH_ON_GRACE_SECONDS)
-        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         tag = power_off_tag(self.coordinator.power_options)

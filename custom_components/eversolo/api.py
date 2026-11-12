@@ -12,6 +12,8 @@ from typing import Any
 
 import aiohttp
 
+from homeassistant.exceptions import HomeAssistantError
+
 from .const import APP_STATUS_OPENABLE, DEFAULT_PORT, POWER_TAG_TIMER, SPECTRUM_OPEN_TYPE, VU_OPEN_TYPE
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,8 +22,12 @@ MUSIC = "/ZidooMusicControl/v2"
 CTRL = "/ZidooControlCenter"
 
 
-class EversoloError(Exception):
-    """Generic API error."""
+class EversoloError(HomeAssistantError):
+    """Generic API error.
+
+    A HomeAssistantError, so a failed action shows its message in the UI
+    instead of "unknown error" with a traceback in the log.
+    """
 
 
 class EversoloConnectionError(EversoloError):
@@ -104,7 +110,8 @@ class EversoloApi:
                 if resp.status >= 400:
                     raise EversoloError(f"HTTP {resp.status} for {path}")
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise EversoloConnectionError(f"{url}: {err}") from err
+            _LOGGER.debug("%s: %s", url, err)
+            raise EversoloConnectionError(f"The player at {self.host} does not answer") from err
         if raw:
             return text
         try:

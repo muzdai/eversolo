@@ -8,7 +8,7 @@
  * Icons come from the eversolo:* icon set (eversolo-icons.js) when it is loaded.
  */
 window.customCards = window.customCards || [];
-const EVERSOLO_CARD_VERSION = "2.7.0";
+const EVERSOLO_CARD_VERSION = "2.7.1";
 
 const BASE_ICONS = {
   play: "M8 5v14l11-7z",
@@ -111,10 +111,19 @@ class EversoloPlayerCard extends HTMLElement {
     }
     this._layout = null;
     this._applyLayout();
+    if (this._hass) this._render(); // options may have changed without a layout change
   }
 
   set hass(hass) {
+    // Home Assistant hands over a new hass object on every state change of any entity.
+    // Redraw only when this card's entity or the language changed.
+    const st = this._config ? hass.states[this._config.entity] : undefined;
+    const lang = hass.locale?.language || hass.language;
+    const same = this._hass && st === this._seenState && lang === this._seenLang;
     this._hass = hass;
+    if (same) return;
+    this._seenState = st;
+    this._seenLang = lang;
     this._render();
   }
 
@@ -610,6 +619,8 @@ class EversoloPlayerCard extends HTMLElement {
         const st = this._state();
         this._playHold = { playing: st.state !== "playing", stamp: st.last_updated, until: Date.now() + 3000 };
         this._render();
+        // If the player never confirms, show its real state again when the hold runs out.
+        setTimeout(() => this._render(), 3100);
         return this._call("media_player", "media_play_pause", { entity_id: entity });
       }
       case "prev": return this._call("media_player", "media_previous_track", { entity_id: entity });
@@ -967,7 +978,11 @@ class EversoloMirrorCard extends HTMLElement {
     const dec = this._decoder;
     if (!dec || dec.state !== "configured") return;
     if (!m.key && !this._gotKey) return;
-    if (!m.key && dec.decodeQueueSize > 30) return; // falling behind: wait for the next key frame
+    if (!m.key && dec.decodeQueueSize > 30) {
+      // Falling behind: the frames after a dropped one depend on it, so skip up to the next key frame.
+      this._gotKey = false;
+      return;
+    }
     let data = b64ToBytes(m.data);
     if (m.key) {
       this._gotKey = true;
