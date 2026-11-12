@@ -1,14 +1,23 @@
 {
   "domain": "eversolo",
   "name": "Eversolo",
-  "codeowners": ["@muzdai"],
+  "codeowners": [
+    "@muzdai"
+  ],
   "config_flow": true,
-  "dependencies": ["http", "frontend", "lovelace", "websocket_api"],
+  "dependencies": [
+    "http",
+    "frontend",
+    "lovelace",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/muzdai/eversolo",
-  "issue_tracker": "https://github.com/muzdai/eversolo/issues",
-  "iot_class": "local_polling",
   "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/muzdai/eversolo/issues",
   "requirements": [],
   "version": "2.7.3",
-  "zeroconf": ["_eversolo._tcp.local."]
+  "zeroconf": [
+    "_eversolo._tcp.local."
+  ]
 }
