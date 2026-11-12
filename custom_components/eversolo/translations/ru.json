@@ -55,6 +55,12 @@
       },
       "output": {
         "name": "Выход"
+      },
+      "dsp_config": {
+        "name": "Конфигурация DSP"
+      },
+      "eq_config": {
+        "name": "Конфигурация EQ"
       }
     },
     "button": {
@@ -68,6 +74,20 @@
     "switch": {
       "power": {
         "name": "Питание"
+      },
+      "dsp": {
+        "name": "DSP"
+      },
+      "eq": {
+        "name": "EQ"
+      }
+    },
+    "number": {
+      "display_brightness": {
+        "name": "Яркость экрана"
+      },
+      "knob_brightness": {
+        "name": "Яркость ручки"
       }
     }
   },

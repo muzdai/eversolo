@@ -14,6 +14,9 @@ CONF_MODEL = "model"
 CONF_MAC = "mac"
 CONF_BROADCAST = "broadcast_address"
 
+# Brightness settings of the player: API name -> entity key.
+BRIGHTNESS_KINDS = {"Screen": "display_brightness", "Knob": "knob_brightness"}
+
 DEFAULT_PORT = 9529
 DEFAULT_NAME = "Eversolo"
 DEFAULT_MODEL = "DMP / DAC"

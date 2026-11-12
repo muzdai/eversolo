@@ -43,6 +43,11 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.power_options: list[dict] = []
         self.apps: list[dict] = []
         self.last_app: str | None = None
+        # "Screen" / "Knob" -> {value, min, max}; only what this model has.
+        self.brightness: dict[str, dict] = {}
+        # "dsp" / "eq" -> {"source": {...}, "configs": [{id, name}]}; only what applies to the current source.
+        self.dsp: dict[str, dict] = {}
+        self._dsp_key: tuple | None = None
         self.last_update_success_time: datetime | None = None
         self._slow_at: float | None = None
         self._confirm_unsub: CALLBACK_TYPE | None = None
@@ -74,6 +79,15 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._slow_at = now
             await self._async_refresh_slow()
 
+        # DSP / EQ assignment belongs to the current input and output: read it again when they change.
+        dsp_key = (
+            tuple(i["tag"] for b in ("inputs", "outputs") for i in self.io[b] if i["selected"]),
+            state.get("hasDspSetting"), state.get("hasEQSetting"), state.get("dspActive"), state.get("eqActive"),
+        )
+        if dsp_key != self._dsp_key:
+            self._dsp_key = dsp_key
+            await self.async_refresh_dsp(state)
+
         self.last_update_success_time = dt_util.utcnow()
         return state
 
@@ -86,6 +100,47 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.apps = await self.api.get_apps()
         except EversoloError as err:
             _LOGGER.debug("App list unavailable: %s", err)
+        for kind in ("Screen", "Knob"):
+            try:
+                value = await self.api.get_brightness(kind)
+            except EversoloError as err:
+                _LOGGER.debug("%s brightness unavailable: %s", kind, err)
+                continue
+            if value:
+                self.brightness[kind] = value
+            else:
+                self.brightness.pop(kind, None)
+
+    async def async_refresh_dsp(self, state: dict[str, Any] | None = None) -> None:
+        state = state if state is not None else (self.data or {})
+        for key, is_dsp, flag in (("dsp", True, "hasDspSetting"), ("eq", False, "hasEQSetting")):
+            if not state.get(flag):
+                self.dsp.pop(key, None)
+                continue
+            try:
+                source = await self.api.get_dsp_source(is_dsp)
+                configs = await self.api.get_dsp_configs(is_dsp) if source else []
+            except EversoloError as err:
+                _LOGGER.debug("%s settings unavailable: %s", key, err)
+                continue
+            if source:
+                self.dsp[key] = {"source": source, "configs": configs}
+            else:
+                self.dsp.pop(key, None)
+
+    async def async_set_dsp(self, key: str, enable: bool | None = None, config_id: int | None = None) -> None:
+        """Switch DSP / EQ for the current source, or give it another config."""
+        await self.async_refresh_dsp()  # the source may have changed since the last read
+        entry = self.dsp.get(key)
+        if not entry:
+            raise EversoloError("DSP / EQ is not available for the current source and output")
+        source = entry["source"]
+        enable = bool(source.get("enable")) if enable is None else enable
+        config_id = source.get("eqId") if config_id is None else config_id
+        await self.api.set_dsp_source(source, enable, config_id)
+        name = next((c["name"] for c in entry["configs"] if c["id"] == config_id), source.get("configName"))
+        entry["source"] = {**source, "enable": enable, "eqId": config_id, "configName": name}
+        self.apply(state={"dspActive" if key == "dsp" else "eqActive": enable})
 
     @callback
     def poll_fast(self, seconds: float) -> None:

@@ -205,6 +205,55 @@ async def main():
     tags = sorted(b._tag for b in added if hasattr(b, "_tag"))
     check(tags == ["poweroff", "reboot", "screen"], f"power buttons added once when the menu shows up {tags}")
 
+    # ---- brightness and DSP (responses as read from a DMP-A8) ----------------
+    from eversolo import number as number_platform, select as select_platform
+    class Api2(Api):
+        def __init__(self):
+            super().__init__(); self.bright = {"Screen": 0, "Knob": 5}; self.dsp_enable = False; self.eq_id = 1
+        async def request(self, path, *, raw=False, timeout=5):
+            if "getState" in path:
+                self.calls.append(path)
+                return {**STATE, "hasDspSetting": True, "hasEQSetting": False, "dspActive": self.dsp_enable, "eqActive": False}
+            for kind, mx in (("Screen", 115), ("Knob", 255)):
+                if f"get{kind}Brightness" in path:
+                    return {"status": 200, "currentValue": self.bright[kind], "maxValue": mx, "minValue": 0}
+                if f"set{kind}Brightness?index=" in path:
+                    self.calls.append(path); self.bright[kind] = int(path.split("=")[1]); return "ok"
+            if "getDSPCurrentSource?isDSP=true" in path:
+                return {"status": "200", "dspSource": {"id": 8, "eqId": self.eq_id, "name": "ARC In", "enable": self.dsp_enable,
+                                                       "sourceType": "EARC", "configName": "Config 1"}}
+            if "getDSPCurrentSource" in path:
+                return {"status": 805, "msg": "The parameter is error or no parameter is submitted"}
+            if "getDSPConfigList" in path:
+                return {"status": "200", "dspConfig": [{"id": 1, "name": "Config 1"}, {"id": 4, "name": "Night"}]}
+            if "setDSPSource" in path:
+                self.calls.append(path); self.dsp_enable = "enable=true" in path; self.eq_id = int(path.split("eqId=")[1]); return "ok"
+            return await super().request(path, raw=raw, timeout=timeout)
+    hass = Hass(); api = Api2(); coord = EversoloCoordinator(hass, api, "x"); await coord.async_refresh()
+    hass.data = {"eversolo": {"e1": coord}}
+    entry = Entry({"host": "192.168.1.46", "port": 9529, "client_uuid": "u1"})
+    coord.power = PowerControl(hass, coord, entry)
+    nums = []; await number_platform.async_setup_entry(hass, entry, nums.extend)
+    by = {n._kind: n for n in nums}
+    check(set(by) == {"Screen", "Knob"} and by["Screen"].native_max_value == 115 and by["Knob"].native_value == 5,
+          "brightness numbers created from what the player reports")
+    await by["Knob"].async_set_native_value(300)
+    check(api.calls[-1].endswith("/SystemSettings/displaySettings/setKnobBrightness?index=255") and by["Knob"].native_value == 255,
+          "brightness set, clamped to the player's range")
+    sws = []; await sw.async_setup_entry(hass, entry, sws.extend)
+    dsp = [x for x in sws if isinstance(x, sw.EversoloDspSwitch)]
+    check(len(dsp) == 1 and dsp[0]._key == "dsp" and dsp[0].available and not dsp[0].is_on, "DSP switch only (EQ is not offered on this output)")
+    await dsp[0].async_turn_on()
+    check(api.calls[-1].endswith("setDSPSource?id=8&sourceType=EARC&enable=true&eqId=1") and dsp[0].is_on, "DSP on for the current source, config kept")
+    sels = []; await select_platform.async_setup_entry(hass, entry, sels.extend)
+    cfg = [x for x in sels if isinstance(x, select_platform.EversoloDspConfigSelect)]
+    check(len(cfg) == 1 and cfg[0].options == ["Config 1", "Night"] and cfg[0].current_option == "Config 1", "DSP config select lists the player's configs")
+    await cfg[0].async_select_option("Night")
+    check(api.calls[-1].endswith("setDSPSource?id=8&sourceType=EARC&enable=true&eqId=4") and cfg[0].current_option == "Night",
+          "config changed, DSP stays on")
+    await dsp[0].async_turn_off()
+    check(api.calls[-1].endswith("enable=false&eqId=4") and not dsp[0].is_on, "DSP off keeps the chosen config")
+
     # ---- diagnostics -------------------------------------------------------
     from eversolo import diagnostics
     hass = Hass(); api = Api(); coord = EversoloCoordinator(hass, api, "x"); await coord.async_refresh()

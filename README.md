@@ -15,6 +15,8 @@ what the official Eversolo Controller 1.15.65 app does (see `docs/protocol.md`).
 | VU meters and spectrum on the device display: next mode | card, "VU meter" and "Spectrum" buttons, services `eversolo.vu_next`, `eversolo.spectrum_next` |
 | Streaming apps on the player (TIDAL, Qobuz, etc., whatever is installed) | card, service `eversolo.open_app` |
 | Device power menu (standby, screen off, reboot: whatever the player reports) | card, one button per item, service `eversolo.power` |
+| Display and knob brightness | `number` "Display brightness", "Knob brightness" (only what the model has) |
+| DSP / EQ for the current source: on/off and config | `switch` "DSP" / "EQ", `select` "DSP config" / "EQ config" (configs are made in the app) |
 | Power: on by Wake on LAN, off by the player's power-off command | `switch.<name>_power`, `media_player.turn_on` / `turn_off`, power button on the card |
 | `eversolo:*` icons (30: logo, player, VU, spectrum, DSP/EQ/Sub, repeat modes, connectors, power) for any card or entity | loaded automatically, see `docs/icons.png` |
 | API probing | service `eversolo.request` (GET on any path, returns the response; administrators only) |
@@ -115,7 +117,6 @@ custom_components/eversolo/      the integration
 tools/eversolo_client.py         standalone CLI client for protocol checks
 docs/protocol.md                 protocol description
 tests/                           tests against a fake player: python3 tests/run.py
-docs/ui_reference/               layouts and icons of the original app
 ```
 
 ## License

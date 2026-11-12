@@ -3,6 +3,7 @@ class ConfigEntry:
     def __init__(self, entry_id, title, data):
         self.entry_id, self.title, self.data, self.options = entry_id, title, data, {}
         self.unique_id = None
+    def async_on_unload(self, fn): self.__dict__.setdefault("unloads", []).append(fn)
 class AbortFlow(Exception):
     def __init__(self, reason): super().__init__(reason); self.reason = reason
 class ConfigFlow:

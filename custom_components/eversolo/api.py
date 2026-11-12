@@ -224,6 +224,48 @@ class EversoloApi:
         """HomeStreamFragment.openApp: launch a streaming app on the device screen."""
         await self.request(f"{CTRL}/Apps/openApp?packageName={_q(package)}", raw=True)
 
+    # ---- brightness (SystemSettings/displaySettings) -----------------------
+    async def get_brightness(self, kind: str) -> dict | None:
+        """kind: "Screen" or "Knob" -> {currentValue, minValue, maxValue}; None when the model has none."""
+        resp = await self.request(f"/SystemSettings/displaySettings/get{kind}Brightness")
+        if not isinstance(resp, dict) or resp.get("status") != 200 or resp.get("currentValue") is None:
+            return None
+        return {
+            "value": int(resp["currentValue"]),
+            "min": int(resp.get("minValue") or 0),
+            "max": int(resp.get("maxValue") or 100),
+        }
+
+    async def set_brightness(self, kind: str, value: int) -> None:
+        await self.request(f"/SystemSettings/displaySettings/set{kind}Brightness?index={int(value)}", raw=True)
+
+    # ---- DSP / EQ per source (DspPresenter) -------------------------------
+    async def get_dsp_source(self, is_dsp: bool) -> dict | None:
+        """The DSP (analog outputs) or EQ (digital outputs) assignment of the current source:
+        {id, eqId, name, enable, sourceType, configName}. None when it does not apply right now."""
+        resp = await self.request(f"{MUSIC}/getDSPCurrentSource?isDSP={str(is_dsp).lower()}")
+        source = resp.get("dspSource") if isinstance(resp, dict) else None
+        return source if isinstance(source, dict) and "id" in source else None
+
+    async def get_dsp_configs(self, is_dsp: bool) -> list[dict]:
+        resp = await self.request(
+            f"{MUSIC}/getDSPConfigList?limit=50&offset=0&isDSP={str(is_dsp).lower()}&isPEQDrc=false"
+        )
+        configs = resp.get("dspConfig") if isinstance(resp, dict) else None
+        return [
+            {"id": c["id"], "name": str(c.get("name") or c["id"])}
+            for c in (configs or [])
+            if isinstance(c, dict) and "id" in c
+        ]
+
+    async def set_dsp_source(self, source: dict, enable: bool, config_id: int) -> None:
+        """Same call as the app's DSP page: switch processing on/off and pick the config for a source."""
+        await self.request(
+            f"{MUSIC}/setDSPSource?id={_q(source['id'])}&sourceType={_q(source.get('sourceType', ''))}"
+            f"&enable={str(bool(enable)).lower()}&eqId={_q(config_id)}",
+            raw=True,
+        )
+
     async def power(self, tag: str) -> None:
         """DevicePowerDialog item: tag from getPowerOption."""
         await self.request(f"{MUSIC}/setPowerOption?tag={_q(tag)}", raw=True)

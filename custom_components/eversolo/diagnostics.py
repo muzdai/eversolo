@@ -30,6 +30,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "inputs_outputs": coordinator.io,
             "power_options": coordinator.power_options,
             "apps": coordinator.apps,
+            "brightness": coordinator.brightness,
+            "dsp": coordinator.dsp,
             "mirror": {
                 "running": bool(mirror and mirror.port is not None),
                 "width": getattr(mirror, "width", None),

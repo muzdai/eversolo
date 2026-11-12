@@ -55,6 +55,12 @@
       },
       "output": {
         "name": "Output"
+      },
+      "dsp_config": {
+        "name": "DSP config"
+      },
+      "eq_config": {
+        "name": "EQ config"
       }
     },
     "button": {
@@ -68,6 +74,20 @@
     "switch": {
       "power": {
         "name": "Power"
+      },
+      "dsp": {
+        "name": "DSP"
+      },
+      "eq": {
+        "name": "EQ"
+      }
+    },
+    "number": {
+      "display_brightness": {
+        "name": "Display brightness"
+      },
+      "knob_brightness": {
+        "name": "Knob brightness"
       }
     }
   },

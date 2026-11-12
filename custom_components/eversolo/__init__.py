@@ -38,7 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.BUTTON, Platform.SWITCH]
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.BUTTON, Platform.SWITCH, Platform.NUMBER]
 
 ATTR_ENTITY_ID = "entity_id"
 ATTR_NAME = "name"
