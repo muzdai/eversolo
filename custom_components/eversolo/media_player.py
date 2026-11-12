@@ -44,6 +44,8 @@ VOLUME = (
     | MediaPlayerEntityFeature.VOLUME_STEP
     | MediaPlayerEntityFeature.VOLUME_MUTE
 )
+POWER_OFF = MediaPlayerEntityFeature.TURN_OFF
+POWER_ON = MediaPlayerEntityFeature.TURN_ON
 OTHER = (
     MediaPlayerEntityFeature.REPEAT_SET
     | MediaPlayerEntityFeature.SHUFFLE_SET
@@ -120,8 +122,35 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
         return None
 
     # ---- state ---------------------------------------------------------
+    # ---- power -----------------------------------------------------------
+    @property
+    def _power(self):
+        return self.coordinator.power
+
+    @property
+    def available(self) -> bool:
+        # With a known MAC the player can be woken, so it shows as "off" instead of unavailable.
+        return self.coordinator.last_update_success or bool(self._power and self._power.can_wake)
+
+    async def async_turn_on(self) -> None:
+        await self._power.async_turn_on()
+
+    async def async_turn_off(self) -> None:
+        await self._power.async_turn_off()
+
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
+        power = self._power
+        if power:
+            base = POWER_OFF | (POWER_ON if power.can_wake else MediaPlayerEntityFeature(0))
+            if not self.coordinator.last_update_success or not power.is_on:
+                return base
+        else:
+            base = MediaPlayerEntityFeature(0)
+        return base | self._playback_features
+
+    @property
+    def _playback_features(self) -> MediaPlayerEntityFeature:
         features = OTHER
         vol = self._volume
         if vol.get("isVolumeEnable", True) and not vol.get("isLock"):
@@ -142,6 +171,15 @@ class EversoloPlayer(EversoloEntity, MediaPlayerEntity):
 
     @property
     def state(self) -> MediaPlayerState:
+        power = self._power
+        if power and not power.is_on:
+            return MediaPlayerState.OFF
+        if not self.coordinator.last_update_success:
+            return MediaPlayerState.IDLE  # woken, still booting
+        return self._play_state
+
+    @property
+    def _play_state(self) -> MediaPlayerState:
         st = self._state.get("state")
         if st == STATE_PLAYING:
             return MediaPlayerState.PLAYING

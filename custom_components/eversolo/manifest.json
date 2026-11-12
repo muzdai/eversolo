@@ -6,6 +6,7 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "diagnostics",
     "http",
     "frontend",
     "lovelace",
@@ -16,7 +17,7 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/muzdai/eversolo/issues",
   "requirements": [],
-  "version": "2.8.0",
+  "version": "2.9.0",
   "zeroconf": [
     "_eversolo._tcp.local."
   ]

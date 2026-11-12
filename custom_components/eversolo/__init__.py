@@ -31,6 +31,7 @@ from .const import (
 )
 from .coordinator import EversoloCoordinator
 from .mirror import MirrorSession
+from .power import PowerControl
 from .wol import normalize_mac
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not coordinator.last_update_success:
         _LOGGER.info("%s is offline; entities stay unavailable until it answers", entry.title)
     coordinator.mirror = MirrorSession(hass, api)
+    coordinator.power = PowerControl(hass, coordinator, entry)
     coordinator.settings = _reload_settings(entry)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

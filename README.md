@@ -15,7 +15,7 @@ what the official Eversolo Controller 1.15.65 app does (see `docs/protocol.md`).
 | VU meters and spectrum on the device display: next mode | card, "VU meter" and "Spectrum" buttons, services `eversolo.vu_next`, `eversolo.spectrum_next` |
 | Streaming apps on the player (TIDAL, Qobuz, etc., whatever is installed) | card, service `eversolo.open_app` |
 | Device power menu (standby, screen off, reboot: whatever the player reports) | card, one button per item, service `eversolo.power` |
-| Power switch: on by Wake on LAN, off by the player's power-off command | `switch.<name>_power` |
+| Power: on by Wake on LAN, off by the player's power-off command | `switch.<name>_power`, `media_player.turn_on` / `turn_off`, power button on the card |
 | `eversolo:*` icons (30: logo, player, VU, spectrum, DSP/EQ/Sub, repeat modes, connectors, power) for any card or entity | loaded automatically, see `docs/icons.png` |
 | API probing | service `eversolo.request` (GET on any path, returns the response; administrators only) |
 
@@ -46,8 +46,14 @@ discovery. If the switch says the MAC is unknown, enter it under **Configure**. 
 subnet (x.x.x.255) and to 255.255.255.255 on ports 9 and 9517. If Home Assistant is in another subnet or VLAN,
 set the broadcast address and make sure your router forwards it.
 
-While the player is off the integration stays loaded: its entities are unavailable, the power switch keeps
-working, and everything comes back as soon as the player answers.
+While the player is off the integration stays loaded: the media player shows `off` (it can be turned on from
+any card or by voice), the other entities are unavailable, and everything comes back as soon as the player
+answers. One or two lost answers do not count as "off".
+
+## Troubleshooting
+
+Settings → Devices & services → Eversolo → the device → **Download diagnostics** saves what the player
+reports (state, inputs and outputs, power menu, apps) with ids and account names removed. Attach it to an issue.
 
 ## Player card
 
@@ -65,6 +71,7 @@ The look follows the Eversolo app's now-playing screen: source and DSP/EQ/Sub, s
 file format and output under the track title. `layout: auto` uses the portrait layout when the screen is held
 upright or the card is narrower than 460 px, landscape otherwise.
 Buttons the current source does not support (for example seeking over Bluetooth) are disabled.
+Both cards can be set up in the visual editor. When the player is off, the card shows a power button.
 
 ## Screen mirror card
 

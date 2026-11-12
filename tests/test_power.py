@@ -8,7 +8,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import HomeAssistantError
 
 import eversolo
-from eversolo import switch as sw, wol, button as button_platform
+from eversolo import switch as sw, wol, power as pw, button as button_platform
+from eversolo.power import PowerControl
+from eversolo.media_player import EversoloPlayer
+from homeassistant.components.media_player import MediaPlayerEntityFeature as MF, MediaPlayerState
 from eversolo.api import EversoloApi, EversoloConnectionError
 from eversolo.config_flow import EversoloOptionsFlow
 from eversolo.coordinator import EversoloCoordinator
@@ -87,15 +90,19 @@ async def main():
 
     # ---- power-off tag ---------------------------------------------------
     opts = [{"tag": "screen"}, {"tag": "reboot"}, {"tag": "poweroff"}]
-    check(sw.power_off_tag(opts) == "poweroff", "poweroff picked (DMP-A6 menu)")
-    check(sw.power_off_tag([{"tag": "screenoff"}, {"tag": "standby"}]) == "standby", "standby when there is no poweroff; screen-off never")
-    check(sw.power_off_tag([{"tag": "screenoff"}, {"tag": "reboot"}]) is None, "no power-off entry -> None")
+    check(pw.power_off_tag(opts) == "poweroff", "poweroff picked (DMP-A6 menu)")
+    check(pw.power_off_tag([{"tag": "screenoff"}, {"tag": "standby"}]) == "standby", "standby when there is no poweroff; screen-off never")
+    check(pw.power_off_tag([{"tag": "screenoff"}, {"tag": "reboot"}]) is None, "no power-off entry -> None")
 
     # ---- switch ----------------------------------------------------------
     hass = Hass(); api = Api()
     coord = EversoloCoordinator(hass, api, "x"); await coord.async_refresh()
     entry = Entry({"host": "192.168.1.46", "port": 9529, "client_uuid": "u1"})
+    coord.power = PowerControl(hass, coord, entry)
     s = sw.EversoloPowerSwitch(coord, entry); s.hass = hass
+    mp = EversoloPlayer(coord, entry)
+    check(mp.state == MediaPlayerState.PLAYING and mp.supported_features & MF.TURN_OFF and not mp.supported_features & MF.TURN_ON,
+          "media player online without MAC: can be turned off, not on")
     check(s.is_on and s.available, "online -> on")
     api.online = False; [await coord.async_refresh() for _ in range(3)]
     check(not s.available, "offline without MAC -> unavailable")
@@ -105,24 +112,29 @@ async def main():
         check(True, "turn_on without MAC raises")
     entry.data = {**entry.data, "mac": "a0:b1:c2:d3:e4:f5"}
     check(s.available and not s.is_on, "offline with MAC -> available, off")
+    check(mp.available and mp.state == MediaPlayerState.OFF and mp.supported_features == MF.TURN_ON | MF.TURN_OFF,
+          "media player offline with MAC: state off, only power features")
     woke = []
     async def fake_wake(h, mac, host, bc=None): woke.append((mac, host, bc))
-    sw.async_wake = fake_wake
+    real_wake = wol.async_wake; wol.async_wake = fake_wake
     await s.async_turn_on()
     check(woke == [("a0:b1:c2:d3:e4:f5", "192.168.1.46", None)] and s.is_on, "turn_on wakes and shows on while booting")
     from homeassistant.helpers import event as ev
-    timer = [e for e in ev.SCHEDULED if not e["cancelled"] and e["action"] == s._async_grace_over]
+    timer = [e for e in ev.SCHEDULED if not e["cancelled"] and e["action"] == coord.power._async_grace_over]
+    check(mp.state == MediaPlayerState.IDLE, "media player while booting: idle")
     check(len(timer) == 1 and abs(timer[0]["delay"] - 120.5) < 1e-6, "a timer is set for the end of the grace period")
-    s._pending_until = 0; w = s.writes; timer[0]["action"](None)
-    check(not s.is_on and s.writes == w + 1, "player never woke up: the timer writes the state back to off")
-    await s.async_turn_on(); api.online = True; await coord.async_refresh()
-    check(s.is_on and s._pending is None, "player answers -> on, pending cleared")
+    coord.power._pending_until = 0; w = coord.listeners; timer[0]["action"](None)
+    check(not s.is_on and coord.listeners == w + 1 and mp.state == MediaPlayerState.OFF, "player never woke up: the timer brings switch and player back to off")
+    await mp.async_turn_on(); api.online = True; await coord.async_refresh()
+    check(s.is_on and coord.power._pending is None and len(woke) == 2 and mp.state == MediaPlayerState.PLAYING,
+          "media_player.turn_on wakes too; player answers -> on, pending cleared")
     # player woken but power menu not read yet: turn_off reads it first
     coord.power_options = []
     api.calls.clear(); await s.async_turn_off()
     check(any("getPowerOption" in c for c in api.calls) and api.calls[-1].endswith("setPowerOption?tag=poweroff") and not s.is_on,
           "turn_off reads the menu, sends poweroff, shows off right away")
-    s._pending_until = 0
+    check(mp.state == MediaPlayerState.OFF, "media player shows off at once as well")
+    coord.power._pending_until = 0
     check(s.is_on, "still answering after the off grace period -> on again")
     api.online = False; [await coord.async_refresh() for _ in range(3)]; api.calls.clear(); coord.power_options = []
     await s.async_turn_off()
@@ -135,6 +147,7 @@ async def main():
     except HomeAssistantError as err:
         check("192.168.1.46" in str(err) and "http" not in str(err), f"offline command -> readable HomeAssistantError ({err})")
 
+    wol.async_wake = real_wake
     # ---- lost polls and offline polling -----------------------------------
     from datetime import timedelta
     hass = Hass(); api = Api()
@@ -191,6 +204,18 @@ async def main():
     api.online = True; await coord.async_refresh(); coord.async_update_listeners(); coord.async_update_listeners()
     tags = sorted(b._tag for b in added if hasattr(b, "_tag"))
     check(tags == ["poweroff", "reboot", "screen"], f"power buttons added once when the menu shows up {tags}")
+
+    # ---- diagnostics -------------------------------------------------------
+    from eversolo import diagnostics
+    hass = Hass(); api = Api(); coord = EversoloCoordinator(hass, api, "x"); await coord.async_refresh()
+    coord.data = {**coord.data, "userName": "me@example.com"}
+    hass.data = {"eversolo": {"e1": coord}}
+    entry = Entry({"host": "192.168.1.46", "port": 9529, "client_uuid": "secret", "mac": "a0:b1:c2:d3:e4:f5"})
+    d = await diagnostics.async_get_config_entry_diagnostics(hass, entry)
+    import json as _json
+    text = _json.dumps(d)
+    check("secret" not in text and "a0:b1" not in text and "me@example.com" not in text and d["online"] and d["power_options"],
+          "diagnostics: state included, ids and account redacted")
 
     # ---- options flow ----------------------------------------------------
     entry = Entry({"host": "192.168.1.46", "port": 9529, "client_uuid": "u1"})

@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import EversoloApi, EversoloError
+from .power import PowerControl
 from .const import (
     CONFIRM_DELAY_SECONDS,
     DOMAIN,
@@ -47,6 +48,7 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._confirm_unsub: CALLBACK_TYPE | None = None
         self._failures = 0
         self._fast_until = 0.0
+        self.power: PowerControl | None = None  # set in async_setup_entry
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -101,6 +103,8 @@ class EversoloCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._confirm_unsub:
             self._confirm_unsub()
             self._confirm_unsub = None
+        if self.power:
+            self.power.async_cancel()
 
     # ---- instant feedback ------------------------------------------------
     @callback

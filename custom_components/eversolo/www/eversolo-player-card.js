@@ -28,11 +28,13 @@ const BASE_ICONS = {
 };
 
 // MediaPlayerEntityFeature bits used to disable controls the source cannot handle.
-const F = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, VOLUME_MUTE: 8, PREV: 16, NEXT: 32, PLAY: 16384, REPEAT: 262144 };
+const F = { PAUSE: 1, SEEK: 2, VOLUME_SET: 4, VOLUME_MUTE: 8, PREV: 16, NEXT: 32, TURN_ON: 128, PLAY: 16384, REPEAT: 262144 };
+const POWER_ICON = "M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A6.92 6.92 0 0 1 19 12a7 7 0 1 1-11.41-5.41L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z";
 
 const STRINGS = {
   en: {
     nothing: "Nothing playing", notFound: "Entity {e} not found", unavailable: "Player is unavailable",
+    isOff: "The player is off", turnOn: "Turn on", waking: "Turning on…",
     input: "Input", output: "Output", vu: "VU meter", spectrum: "Spectrum", app: "Apps", power: "Power", more: "More",
     dsp: "DSP", eq: "EQ", sub: "Subwoofer", on: "on", off: "off",
     loopTitle: "Loop mode", openApp: "Open app", empty: "Nothing available on this device",
@@ -40,6 +42,7 @@ const STRINGS = {
   },
   ru: {
     nothing: "Ничего не играет", notFound: "Сущность {e} не найдена", unavailable: "Плеер недоступен",
+    isOff: "Плеер выключен", turnOn: "Включить", waking: "Включается…",
     input: "Вход", output: "Выход", vu: "VU-индикатор", spectrum: "Спектр", app: "Приложения", power: "Питание", more: "Ещё",
     dsp: "DSP", eq: "EQ", sub: "Сабвуфер", on: "вкл", off: "выкл",
     loopTitle: "Режим повтора", openApp: "Открыть приложение", empty: "На устройстве ничего нет",
@@ -143,6 +146,29 @@ class EversoloPlayerCard extends HTMLElement {
       (s) => s.startsWith("media_player.") && hass.states[s].attributes && "vu_mode" in hass.states[s].attributes,
     );
     return { entity: e || "media_player.eversolo" };
+  }
+
+  /* Visual editor (Home Assistant builds the form from this). */
+  static getConfigForm() {
+    const ru = (document.documentElement.lang || "").startsWith("ru");
+    const labels = ru
+      ? { entity: "Плеер", layout: "Раскладка", show_background: "Фон из обложки", show_spectrum: "Столбики уровня",
+          show_volume: "Регулятор громкости", show_chips: "Кнопки входа, выхода, приложений и питания" }
+      : { entity: "Player", layout: "Layout", show_background: "Background from the cover", show_spectrum: "Level bars",
+          show_volume: "Volume slider", show_chips: "Input, output, apps and power chips" };
+    return {
+      schema: [
+        { name: "entity", required: true, selector: { entity: { domain: "media_player", integration: "eversolo" } } },
+        { name: "layout", selector: { select: { mode: "dropdown", options: ["auto", "landscape", "portrait"] } } },
+        { type: "grid", name: "", schema: [
+          { name: "show_background", selector: { boolean: {} } },
+          { name: "show_spectrum", selector: { boolean: {} } },
+          { name: "show_volume", selector: { boolean: {} } },
+          { name: "show_chips", selector: { boolean: {} } },
+        ] },
+      ],
+      computeLabel: (field) => labels[field.name] || field.name,
+    };
   }
 
   connectedCallback() {
@@ -283,7 +309,12 @@ class EversoloPlayerCard extends HTMLElement {
         .menu .it:hover { background:rgba(255,255,255,.08); }
         .menu .it.sel { background:rgba(255,255,255,.14); }
         .menu .it small { opacity:.55; }
-        .unavail { padding:24px; text-align:center; opacity:.7; }
+        .unavail { padding:28px 24px; text-align:center; display:grid; justify-items:center; gap:18px;
+                   font-size:clamp(15px, 2.6cqw, 22px); letter-spacing:.04em; color:rgba(244,241,238,.7); }
+        .pwr { all:unset; cursor:pointer; width:64px; height:64px; border-radius:50%; display:grid; place-items:center;
+               box-shadow: inset 0 0 0 2px var(--accent); background:rgba(0,0,0,.18); }
+        .pwr:active { transform:scale(.95); }
+        .pwr svg { width:46%; height:46%; fill:#fff; }
       </style>
       <img class="amb" id="amb" alt=""><div class="bg" id="bg"></div><div class="shade"></div>
       <div class="wrap" id="wrap"></div>
@@ -323,13 +354,22 @@ class EversoloPlayerCard extends HTMLElement {
     if (!this._root || !this._hass || !this._config) return;
     const st = this._state();
     const wrap = this._root.getElementById("wrap");
-    if (!st || st.state === "unavailable") {
-      const msg = st ? this._t("unavailable") : this._t("notFound").replace("{e}", this._config.entity);
-      wrap.innerHTML = `<div class="unavail">${esc(msg)}</div>`;
+    if (!st || st.state === "unavailable" || st.state === "off") {
+      const off = st && st.state === "off";
+      const msg = off ? this._t("isOff") : st ? this._t("unavailable") : this._t("notFound").replace("{e}", this._config.entity);
+      // An off player that can be woken (Wake on LAN) gets a power button.
+      const canWake = off && ((Number(st.attributes.supported_features) || 0) & F.TURN_ON);
+      const html = `<div class="unavail">${esc(msg)}${canWake
+        ? `<button class="pwr" data-act="power-on" title="${esc(this._t("turnOn"))}" aria-label="${esc(this._t("turnOn"))}">${svg(POWER_ICON)}</button>` : ""}</div>`;
+      if (this._offHtml !== html) { wrap.innerHTML = html; this._offHtml = html; }
       this._rendered = false;
+      this._specOn = false;
       this._setColors(null);
+      const amb = this._root.getElementById("amb");
+      if (amb) { amb.classList.remove("on"); amb.removeAttribute("src"); delete amb.dataset.src; }
       return;
     }
+    this._offHtml = null;
     if (!this._rendered) {
       wrap.innerHTML = `
         <div class="top"><div class="src" id="src"></div><div class="tools" id="tools"></div></div>
@@ -630,6 +670,11 @@ class EversoloPlayerCard extends HTMLElement {
     }
     if (btn.dataset.list) return this._openList(btn.dataset.list);
     switch (btn.dataset.act) {
+      case "power-on": {
+        const label = this._root.querySelector(".unavail");
+        if (label && label.firstChild) label.firstChild.textContent = this._t("waking");
+        return this._call("media_player", "turn_on", { entity_id: entity });
+      }
       case "play": {
         const st = this._state();
         this._playHold = { playing: st.state !== "playing", stamp: st.last_updated, until: Date.now() + 3000 };
@@ -815,7 +860,7 @@ class EversoloMirrorCard extends HTMLElement {
 
   _entityOnline() {
     const st = this._hass && this._hass.states[this._config.entity];
-    return !!st && st.state !== "unavailable" && st.state !== "unknown";
+    return !!st && !["unavailable", "unknown", "off"].includes(st.state);
   }
 
   getCardSize() { return 6; }
@@ -826,6 +871,19 @@ class EversoloMirrorCard extends HTMLElement {
       (s) => s.startsWith("media_player.") && hass.states[s].attributes && "vu_mode" in hass.states[s].attributes,
     );
     return { entity: e || "media_player.eversolo" };
+  }
+
+  static getConfigForm() {
+    const ru = (document.documentElement.lang || "").startsWith("ru");
+    const labels = ru ? { entity: "Плеер", show_nav: "Кнопки «Назад», «Домой» и громкость" }
+                      : { entity: "Player", show_nav: "Back, Home and volume buttons" };
+    return {
+      schema: [
+        { name: "entity", required: true, selector: { entity: { domain: "media_player", integration: "eversolo" } } },
+        { name: "show_nav", selector: { boolean: {} } },
+      ],
+      computeLabel: (field) => labels[field.name] || field.name,
+    };
   }
 
   _offlineText() {
