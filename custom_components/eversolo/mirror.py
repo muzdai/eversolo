@@ -12,6 +12,11 @@ Protocol, from RemoteScreenActivity / Scrcpy / ScrcpyApi / VideoPacket in the ap
 
 Home Assistant relays the stream to the card over its websocket, so it works wherever
 the HA frontend works (including through a reverse proxy).
+
+Flow control: that websocket is shared with the rest of the frontend, and Home Assistant
+drops a connection whose send queue stays long. So every viewer acknowledges the frames it
+received; a viewer that falls behind gets no more frames until it has caught up, and then
+continues from the last key frame (config + the frames since it), like a viewer that joins late.
 """
 from __future__ import annotations
 
@@ -34,8 +39,35 @@ ACTION_DOWN, ACTION_UP, ACTION_MOVE = 0, 1, 2
 STOP_GRACE_SECONDS = 15  # keep the stream open briefly when the card is re-rendered
 MAX_GOP_FRAMES = 600  # frames kept since the last key frame, for viewers that join late
 MAX_PACKET = 8 * 1024 * 1024
+MAX_UNACKED_FRAMES = 60  # about 2 s of video in flight: beyond this the viewer is paused
+RESUME_UNACKED_FRAMES = 10  # a paused viewer continues once it is this close again
 
 Listener = Callable[[dict[str, Any]], None]
+
+
+class Viewer:
+    """One open card: where to send, and how far it has got."""
+
+    _next_id = 0
+
+    def __init__(self, send: Listener) -> None:
+        Viewer._next_id += 1
+        self.id = Viewer._next_id
+        self.send = send
+        self.sent = 0
+        self.acked: int | None = None  # None: a card without acknowledgements (older version)
+        self.synced = False
+        self.burst_end = 0  # frame count after the last catch-up burst
+
+    @property
+    def unacked(self) -> int:
+        return 0 if self.acked is None else self.sent - self.acked
+
+    @property
+    def behind(self) -> int:
+        """Live frames in flight. The catch-up burst itself does not count: it may be longer
+        than the limit, and counting it would pause the viewer again right after resuming."""
+        return 0 if self.acked is None else self.sent - max(self.acked, self.burst_end)
 
 
 class MirrorSession:
@@ -44,7 +76,7 @@ class MirrorSession:
     def __init__(self, hass: HomeAssistant, api: EversoloApi) -> None:
         self.hass = hass
         self.api = api
-        self._listeners: set[Listener] = set()
+        self._viewers: dict[int, Viewer] = {}
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
@@ -55,47 +87,93 @@ class MirrorSession:
         self.height = 0
         self._config: bytes | None = None
         self._gop: list[tuple[bool, bytes]] = []
+        self._gop_complete = True
 
     # ---- viewers ---------------------------------------------------------
-    async def async_subscribe(self, listener: Listener) -> Callable[[], None]:
+    async def async_subscribe(self, listener: Listener) -> tuple[Viewer, Callable[[], None]]:
+        """Start the stream if needed. Call start(viewer) once the caller is ready for messages."""
         if self._stop_handle:
             self._stop_handle.cancel()
             self._stop_handle = None
-        self._listeners.add(listener)
+        viewer = Viewer(listener)
         try:
             await self._async_ensure_running()
         except Exception:
-            self._listeners.discard(listener)
+            self._schedule_stop()
             raise
 
         @callback
         def unsubscribe() -> None:
-            self._listeners.discard(listener)
-            if not self._listeners and self._stop_handle is None:
-                self._stop_handle = self.hass.loop.call_later(
-                    STOP_GRACE_SECONDS, lambda: self.hass.async_create_task(self.async_stop())
-                )
+            self._viewers.pop(viewer.id, None)
+            self._schedule_stop()
 
-        return unsubscribe
+        return viewer, unsubscribe
 
     @callback
-    def replay(self, listener: Listener) -> None:
-        """Late joiners get the codec config and the frames since the last key frame."""
-        if self._config is not None:
-            listener(self._config_message())
-            for key, data in list(self._gop):
-                listener(_frame_message(key, data))
+    def _schedule_stop(self) -> None:
+        if not self._viewers and self._stop_handle is None:
+            self._stop_handle = self.hass.loop.call_later(
+                STOP_GRACE_SECONDS, lambda: self.hass.async_create_task(self.async_stop())
+            )
+
+    @callback
+    def start(self, viewer: Viewer) -> None:
+        """Begin sending to a viewer: the picture so far (config + frames since the key frame), then live."""
+        if self._stop_handle:
+            self._stop_handle.cancel()
+            self._stop_handle = None
+        self._viewers[viewer.id] = viewer
+        self._sync(viewer)
+
+    @callback
+    def ack(self, viewer_id: int, received: int) -> None:
+        """The card reports how many frames it has received in total."""
+        viewer = self._viewers.get(viewer_id)
+        if viewer is None:
+            return
+        viewer.acked = max(viewer.acked or 0, min(int(received), viewer.sent))
+        if not viewer.synced and viewer.unacked <= RESUME_UNACKED_FRAMES:
+            self._sync(viewer)
+
+    def _send(self, viewer: Viewer, message: dict[str, Any]) -> None:
+        try:
+            viewer.send(message)
+        except Exception:  # noqa: BLE001 - one broken viewer must not stop the others
+            _LOGGER.debug("Mirror viewer failed", exc_info=True)
+
+    def _sync(self, viewer: Viewer) -> None:
+        """Send config and the frames since the last key frame, if they are all still there."""
+        if self._config is None or not self._gop or not self._gop_complete:
+            return  # nothing to show yet; the next key frame syncs the viewer
+        self._send(viewer, self._config_message(viewer))
+        for key, data in self._gop:
+            self._send(viewer, _frame_message(key, data))
+        viewer.sent += len(self._gop)
+        viewer.burst_end = viewer.sent
+        viewer.synced = True
+
+    def _deliver(self, key: bool, data: bytes) -> None:
+        """A new frame (already appended to the GOP) for every viewer."""
+        message = None
+        for viewer in list(self._viewers.values()):
+            if viewer.synced and viewer.behind > MAX_UNACKED_FRAMES:
+                viewer.synced = False  # fell behind: pause, then continue from a key frame
+            if not viewer.synced:
+                if viewer.unacked <= RESUME_UNACKED_FRAMES:
+                    self._sync(viewer)
+                continue
+            message = message or _frame_message(key, data)
+            self._send(viewer, message)
+            viewer.sent += 1
 
     def _broadcast(self, message: dict[str, Any]) -> None:
-        for listener in list(self._listeners):
-            try:
-                listener(message)
-            except Exception:  # noqa: BLE001 - one broken viewer must not stop the others
-                _LOGGER.debug("Mirror listener failed", exc_info=True)
+        for viewer in list(self._viewers.values()):
+            self._send(viewer, message)
 
-    def _config_message(self) -> dict[str, Any]:
+    def _config_message(self, viewer: Viewer) -> dict[str, Any]:
         return {
             "type": "config",
+            "viewer": viewer.id,
             "width": self.width,
             "height": self.height,
             "data": base64.b64encode(self._config or b"").decode(),
@@ -106,6 +184,13 @@ class MirrorSession:
         async with self._lock:
             if self._task and not self._task.done():
                 return
+            if self.port is not None:
+                # The previous stream ended on its own; tell the player it is closed before starting anew.
+                old, self.port = self.port, None
+                try:
+                    await self.api.request(f"/ZidooControlCenter/setcastmode?mode=0&port={old}", raw=True)
+                except EversoloError:
+                    pass
             resp = await self.api.request("/ZidooControlCenter/setcastmode?mode=1&version=1", timeout=10)
             if not isinstance(resp, dict) or "port" not in resp:
                 raise EversoloError(f"screen mirroring was not started: {resp!r}")
@@ -125,7 +210,7 @@ class MirrorSession:
                     asyncio.open_connection(self.api.host, self.port), timeout=10
                 )
             self._config = None
-            self._gop = []
+            self._gop, self._gop_complete = [], True
             self._task = self.hass.async_create_background_task(self._async_read_loop(), "eversolo mirror")
 
     async def _async_read_loop(self) -> None:
@@ -135,24 +220,30 @@ class MirrorSession:
             while True:
                 length = int.from_bytes(await reader.readexactly(4), "big", signed=True)
                 if length <= 0 or length > MAX_PACKET:
-                    continue
+                    # Out of step with the stream: nothing after this can be trusted.
+                    _LOGGER.debug("Mirror stream: bad packet length %s", length)
+                    break
                 packet = await reader.readexactly(length)
                 if len(packet) < 10 or packet[0] != TYPE_VIDEO:
                     continue
                 flag, data = packet[1], packet[10:]
                 if flag == FLAG_CONFIG:
                     self._config = data
-                    self._gop = []
-                    self._broadcast(self._config_message())
+                    self._gop, self._gop_complete = [], True
+                    for viewer in self._viewers.values():
+                        viewer.synced = False  # new stream parameters: start again at the next key frame
                 elif flag == FLAG_END:
                     break
                 else:
                     key = flag == FLAG_KEY
                     if key:
-                        self._gop = []
+                        self._gop, self._gop_complete = [], True
                     if len(self._gop) < MAX_GOP_FRAMES:
                         self._gop.append((key, data))
-                    self._broadcast(_frame_message(key, data))
+                    else:
+                        # Too long without a key frame to keep it all: late viewers wait for the next one.
+                        self._gop_complete = False
+                    self._deliver(key, data)
         except (asyncio.IncompleteReadError, ConnectionError, OSError) as err:
             _LOGGER.debug("Mirror stream closed: %s", err)
         finally:
@@ -170,21 +261,24 @@ class MirrorSession:
 
     async def async_stop(self) -> None:
         self._stop_handle = None
-        if self._listeners:
-            return
-        task, self._task = self._task, None
-        if task and not task.done():
-            task.cancel()
-        await self._async_close_socket()
-        if self.port is not None:
-            try:
-                await self.api.request(f"/ZidooControlCenter/setcastmode?mode=0&port={self.port}", raw=True)
-            except EversoloError as err:
-                _LOGGER.debug("Could not stop mirroring: %s", err)
-            self.port = None
+        # Under the lock, so a card that opens right now starts a new stream only after this
+        # one is fully closed (and this cannot close the new one by mistake).
+        async with self._lock:
+            if self._viewers:
+                return
+            task, self._task = self._task, None
+            port, self.port = self.port, None
+            if task and not task.done():
+                task.cancel()
+            await self._async_close_socket()
+            if port is not None:
+                try:
+                    await self.api.request(f"/ZidooControlCenter/setcastmode?mode=0&port={port}", raw=True)
+                except EversoloError as err:
+                    _LOGGER.debug("Could not stop mirroring: %s", err)
 
     async def async_shutdown(self) -> None:
-        self._listeners.clear()
+        self._viewers.clear()
         if self._stop_handle:
             self._stop_handle.cancel()
         await self.async_stop()

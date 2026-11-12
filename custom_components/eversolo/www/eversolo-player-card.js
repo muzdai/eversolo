@@ -153,14 +153,25 @@ class EversoloPlayerCard extends HTMLElement {
     this._mq.addEventListener("change", this._mqListener);
     this._iconsListener = () => { this._rendered = false; this._render(); };
     window.addEventListener("eversolo-icons-loaded", this._iconsListener);
-    this._tick = setInterval(() => this._updateProgress(), 500);
+    this._tick = setInterval(() => { if (this._visible()) this._updateProgress(); }, 500);
+    this._onScreen = true;
+    if (typeof IntersectionObserver !== "undefined") {
+      this._io = new IntersectionObserver((entries) => {
+        this._onScreen = entries[entries.length - 1].isIntersecting;
+        if (this._onScreen) { this._updateProgress(); this._setSpectrum(!!this._specPlaying); }
+      });
+      this._io.observe(this);
+    }
     this._applyLayout();
   }
+
+  _visible() { return !document.hidden && this._onScreen !== false; }
 
   disconnectedCallback() {
     if (this._ro) this._ro.disconnect();
     if (this._mq) this._mq.removeEventListener("change", this._mqListener);
     window.removeEventListener("eversolo-icons-loaded", this._iconsListener);
+    if (this._io) { this._io.disconnect(); this._io = null; }
     clearInterval(this._tick);
     this._specOn = false;
     cancelAnimationFrame(this._raf);
@@ -531,7 +542,7 @@ class EversoloPlayerCard extends HTMLElement {
     // are the point of the feature, so they are not switched off. show_spectrum: false does that.
     this._specCalm = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     // Playing: animate. Paused/idle: draw the unlit segment grid once, like the device screen.
-    const wanted = playing || !this._specIdleDrawn;
+    const wanted = (playing || !this._specIdleDrawn) && this._onScreen !== false;
     if (wanted && !this._specOn) {
       this._specOn = true;
       this._raf = requestAnimationFrame((t) => this._specFrame(t));
@@ -540,6 +551,7 @@ class EversoloPlayerCard extends HTMLElement {
 
   _specFrame(ts) {
     if (!this._specOn) return;
+    if (this._onScreen === false) { this._specOn = false; return; } // scrolled away: resume when visible again
     const next = () => { this._raf = requestAnimationFrame((t) => this._specFrame(t)); };
     if (ts - (this._specLast || 0) < 33) return next(); // ~30 fps is plenty
     this._specLast = ts;
@@ -730,11 +742,11 @@ class EversoloPlayerCard extends HTMLElement {
  * Tap, drag and swipe on the picture act on the player's touchscreen. */
 const MIRROR_STRINGS = {
   en: { connecting: "Connecting to the player screen…", ended: "Mirroring stopped. Tap to reconnect.",
-        nocodec: "This browser cannot decode the stream (WebCodecs is missing).",
+        nocodec: "This browser cannot decode the stream (it has no H.264 video decoding).",
         insecure: "The screen needs Home Assistant opened over HTTPS (browsers allow video decoding only there).", failed: "Could not start mirroring: {e}",
         back: "Back", home: "Home", voldown: "Volume down", volup: "Volume up" },
   ru: { connecting: "Подключение к экрану плеера…", ended: "Трансляция остановлена. Нажмите, чтобы переподключиться.",
-        nocodec: "Браузер не умеет декодировать поток (нет WebCodecs).",
+        nocodec: "Этот браузер не умеет декодировать поток (нет декодера H.264).",
         insecure: "Для экрана откройте Home Assistant по HTTPS: браузеры разрешают декодирование видео только там.", failed: "Не удалось запустить трансляцию: {e}",
         back: "Назад", home: "Домой", voldown: "Тише", volup: "Громче" },
 };
@@ -871,16 +883,28 @@ class EversoloMirrorCard extends HTMLElement {
   }
 
   connectedCallback() {
-    this._vis = () => (document.hidden ? this._stop() : this._start());
+    // Stream only while the card can be seen: tab in front and card inside the viewport.
+    this._onScreen = true;
+    this._vis = () => (this._shown() ? this._start() : this._stop());
     document.addEventListener("visibilitychange", this._vis);
+    if (typeof IntersectionObserver !== "undefined") {
+      this._io = new IntersectionObserver((entries) => {
+        this._onScreen = entries[entries.length - 1].isIntersecting;
+        this._vis();
+      });
+      this._io.observe(this);
+    }
     if (this._hass) this._start();
   }
 
   disconnectedCallback() {
     document.removeEventListener("visibilitychange", this._vis);
+    if (this._io) { this._io.disconnect(); this._io = null; }
     this._stop();
     this._clearRetry();
   }
+
+  _shown() { return !document.hidden && this._onScreen !== false; }
 
   _status(text) {
     const m = this._root.getElementById("msg");
@@ -910,11 +934,14 @@ class EversoloMirrorCard extends HTMLElement {
   }
 
   async _start() {
-    if (this._unsub || this._starting || !this._hass || document.hidden) return;
+    if (this._unsub || this._starting || !this._hass || !this._shown() || this._unsupported) return;
     for (const b of this._root.querySelectorAll(".nav button")) b.title = this._t(b.dataset.key);
     if (typeof VideoDecoder === "undefined") { this._status(this._t(window.isSecureContext ? "nocodec" : "insecure")); return; }
     this._starting = true;
     this._ended = false;
+    this._rx = 0;
+    this._viewer = null;
+    this._decodeErrors = 0;
     this._clearRetry();
     if (!this._entityOnline()) { this._starting = false; this._showOffline(); return; }
     if (!this._offline) this._status(this._t("connecting"));
@@ -938,6 +965,12 @@ class EversoloMirrorCard extends HTMLElement {
   }
 
   _stop() {
+    // Do not leave a finger "down" on the player's screen.
+    if (this._pressed && this._unsub) {
+      this._pressed = false;
+      this._send({ type: "eversolo/mirror/touch", action: 1, ...(this._lastPoint || { x: 0, y: 0 }) });
+    }
+    clearTimeout(this._ackTimer);
     const unsub = this._unsub;
     this._unsub = null;
     if (unsub) unsub().catch(() => {});
@@ -963,21 +996,63 @@ class EversoloMirrorCard extends HTMLElement {
   }
 
   _configure(m) {
-    this._closeDecoder();
+    if (m.viewer != null) this._viewer = m.viewer;
     this._config_bytes = b64ToBytes(m.data);
     this._w = m.width || 960; this._h = m.height || 480;
     this._canvas.width = this._w; this._canvas.height = this._h;
     this.style.setProperty("--ratio", `${this._w} / ${this._h}`);
     this._ts = 0;
-    this._decoder = new VideoDecoder({
-      output: (frame) => { this._ctx.drawImage(frame, 0, 0, this._w, this._h); frame.close(); this._status(""); },
-      error: (e) => { this._status(this._t("failed").replace("{e}", e.message)); this._closeDecoder(); },
+    this._openDecoder();
+    // Ask once whether this browser can decode the stream at all (some have WebCodecs without H.264).
+    if (!this._codecChecked && VideoDecoder.isConfigSupported) {
+      this._codecChecked = true;
+      VideoDecoder.isConfigSupported({ codec: avcCodec(this._config_bytes) }).then((r) => {
+        if (r && r.supported === false) this._giveUp(this._t("nocodec"));
+      }).catch(() => {});
+    }
+  }
+
+  _openDecoder() {
+    this._closeDecoder();
+    const dec = new VideoDecoder({
+      output: (frame) => {
+        this._ctx.drawImage(frame, 0, 0, this._w, this._h); frame.close();
+        this._decodeErrors = 0;
+        this._status("");
+      },
+      error: (e) => {
+        if (this._decoder !== dec) return;
+        // A broken frame closes the decoder. Open a new one at the next key frame; give up
+        // only when that keeps failing (the browser cannot decode this stream).
+        this._closeDecoder();
+        this._decodeErrors = (this._decodeErrors || 0) + 1;
+        if (this._decodeErrors >= 3) this._giveUp(this._t("failed").replace("{e}", e.message));
+      },
     });
     // No description: chunks are Annex-B, so SPS/PPS go in front of every key frame.
-    this._decoder.configure({ codec: avcCodec(this._config_bytes), optimizeForLatency: true });
+    dec.configure({ codec: avcCodec(this._config_bytes), optimizeForLatency: true });
+    this._decoder = dec;
+  }
+
+  /* Stop receiving a stream this browser cannot show. */
+  _giveUp(text) {
+    this._unsupported = true;
+    this._stop();
+    this._status(text);
+  }
+
+  _ack() {
+    if (this._viewer == null || !this._unsub) return;
+    this._send({ type: "eversolo/mirror/ack", viewer: this._viewer, received: this._rx });
   }
 
   _frame(m) {
+    // Flow control: tell the integration how far we are, so it can pause when we fall behind.
+    this._rx = (this._rx || 0) + 1;
+    if (this._rx % 10 === 0) this._ack();
+    clearTimeout(this._ackTimer);
+    this._ackTimer = setTimeout(() => this._ack(), 250);
+    if (m.key && !this._decoder && this._config_bytes && !this._unsupported) this._openDecoder();
     const dec = this._decoder;
     if (!dec || dec.state !== "configured") return;
     if (!m.key && !this._gotKey) return;
@@ -1020,7 +1095,7 @@ class EversoloMirrorCard extends HTMLElement {
     this._canvas.setPointerCapture(e.pointerId);
     this._pressed = true;
     this._lastMove = 0;
-    const p = this._point(e);
+    const p = this._lastPoint = this._point(e);
     this._send({ type: "eversolo/mirror/touch", action: 0, ...p });
   }
 
@@ -1029,7 +1104,7 @@ class EversoloMirrorCard extends HTMLElement {
     const now = performance.now();
     if (now - this._lastMove < 16) return; // ~60 updates per second is enough for swipes
     this._lastMove = now;
-    this._send({ type: "eversolo/mirror/touch", action: 2, ...this._point(e) });
+    this._send({ type: "eversolo/mirror/touch", action: 2, ...(this._lastPoint = this._point(e)) });
   }
 
   _up(e) {

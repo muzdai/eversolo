@@ -56,6 +56,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass, ws_mirror_subscribe)
     websocket_api.async_register_command(hass, ws_mirror_touch)
     websocket_api.async_register_command(hass, ws_mirror_key)
+    websocket_api.async_register_command(hass, ws_mirror_ack)
     return True
 
 
@@ -339,14 +340,32 @@ async def ws_mirror_subscribe(hass: HomeAssistant, connection: websocket_api.Act
         connection.send_message(websocket_api.event_message(msg_id, payload))
 
     try:
-        unsubscribe = await coord.mirror.async_subscribe(forward)
+        viewer, unsubscribe = await coord.mirror.async_subscribe(forward)
     except (EversoloError, OSError, TimeoutError) as err:
         _LOGGER.debug("Screen mirroring could not start: %s", err)
         connection.send_error(msg_id, "device_offline", str(err))
         return
     connection.subscriptions[msg_id] = unsubscribe
     connection.send_result(msg_id)
-    coord.mirror.replay(forward)
+    coord.mirror.start(viewer)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "eversolo/mirror/ack",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("viewer"): vol.Coerce(int),
+        vol.Required("received"): vol.Coerce(int),
+    }
+)
+@callback
+def ws_mirror_ack(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """Flow control: the card reports how many frames it has received (see mirror.py)."""
+    try:
+        _coordinator_for(hass, msg["entity_id"]).mirror.ack(msg["viewer"], msg["received"])
+    except HomeAssistantError:
+        pass
+    connection.send_result(msg["id"])
 
 
 @websocket_api.websocket_command(
